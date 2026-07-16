@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "OTC Sale",
+    "slug": "otc-sale",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": { "supportsTablet": true },
+    "android": {
+      "permissions": ["CAMERA"]
+    },
+    "plugins": ["expo-image-picker"]
+  }
+}

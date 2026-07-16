@@ -1,0 +1,437 @@
+<script>
+  // ==============================================
+  // MOB FORM OVERLAY ACTIONS & LOGIC
+  // ==============================================
+  function openForm(docType) {
+    currentDocType = docType;
+    document.getElementById("m-form-title").textContent =
+      docType === "Restock"
+        ? "ขอเบิกของเข้าสต็อกเซลล์"
+        : docType === "Consign"
+          ? "บันทึกฝากขายหน้าร้านยา"
+          : docType === "Sale"
+            ? "รายงานขายจริงออกหน้าร้าน"
+            : "ทำรายการส่งคืนสินค้า";
+
+    document.getElementById("m-form-subtitle").textContent = docType + " Form";
+
+    document.getElementById("mform-return-subtype-sec").classList.add("hidden");
+    document.getElementById("mform-store-sec").classList.add("hidden");
+    document.getElementById("mform-slip-sec").classList.add("hidden");
+
+    if (docType === "Consign" || docType === "Sale") {
+      document.getElementById("mform-store-sec").classList.remove("hidden");
+    }
+
+    if (docType === "Sale") {
+      document.getElementById("mform-remark-sec").classList.remove("hidden");
+      document.getElementById("mform-slip-sec").classList.remove("hidden");
+    }
+
+    if (docType === "Return") {
+      document
+        .getElementById("mform-return-subtype-sec")
+        .classList.remove("hidden");
+      document.getElementById("mform-return-subtype").value =
+        "Pharmacy_to_Sale";
+    }
+
+    document.getElementById("mform-store").value = "";
+    document.getElementById("mform-remark").value = "";
+    document.getElementById("mform-cart").innerHTML = "";
+    document.getElementById("mform-slip-label").textContent =
+      "กดเพื่อเปิดกล้อง / แนบรูปภาพ";
+    document
+      .getElementById("mform-slip-preview-container")
+      .classList.add("hidden");
+    document.getElementById("mform-slip-preview").src = "";
+
+    addCartItemRow();
+    toggleFormInputs();
+
+    document.getElementById("m-form-overlay").classList.remove("hidden");
+  }
+
+  function closeForm() {
+    document.getElementById("m-form-overlay").classList.add("hidden");
+  }
+
+  function toggleFormInputs() {
+    const rSubtype = document.getElementById("mform-return-subtype").value;
+    const storeSec = document.getElementById("mform-store-sec");
+
+    if (currentDocType === "Return") {
+      if (rSubtype === "Pharmacy_to_Sale") {
+        storeSec.classList.remove("hidden");
+      } else {
+        storeSec.classList.add("hidden");
+      }
+    }
+    loadProductStockLimits();
+  }
+
+  function loadProductStockLimits() {
+    const container = document.getElementById("mform-cart");
+    for (let i = 0; i < container.children.length; i++) {
+      const rowId = container.children[i].id;
+      if (rowId && rowId.startsWith("cart-row-")) {
+        const idx = rowId.replace("cart-row-", "");
+        const hiddenProd = document.getElementById(`cart-item-prod-${idx}`);
+        const prevValue = hiddenProd ? hiddenProd.value : null;
+
+        populateCartRowProducts(idx);
+
+        const prods = window[`cartAvailableProducts_${idx}`] || [];
+        if (prevValue && prods.some((p) => p.ProductID === prevValue)) {
+          const p = prods.find((x) => x.ProductID === prevValue);
+          hiddenProd.value = p.ProductID;
+          document.getElementById(`cart-item-search-${idx}`).value =
+            `${p.ProductName || "ไม่มีชื่อสินค้า"} [${p.SKU || "ไม่มีรหัส"}] ฿${Number(p.Price || 0).toLocaleString()}`;
+        }
+      }
+    }
+  }
+
+  function addCartItemRow() {
+    const container = document.getElementById("mform-cart");
+    const idx = container.children.length;
+
+    const row = document.createElement("div");
+    row.className =
+      "flex gap-2 items-start bg-slate-50 p-3 rounded-2xl border border-slate-200 relative fade-in";
+    row.id = `cart-row-${idx}`;
+
+    row.innerHTML = `
+      <div class="flex-1 relative" id="cart-prod-container-${idx}">
+        <input type="hidden" id="cart-item-prod-${idx}">
+        <div class="relative">
+          <input type="text" id="cart-item-search-${idx}" placeholder="พิมพ์ค้นหาสินค้า..." onkeyup="filterProductOptions(${idx})" onfocus="showProductOptions(${idx})" autocomplete="off" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold cursor-text text-slate-700">
+          <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+            <svg class="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+          </div>
+        </div>
+        <div id="cart-item-options-${idx}" class="hidden absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+        </div>
+        <span class="text-[9px] text-slate-400 font-bold block mt-1" id="cart-item-limit-lbl-${idx}">มีให้สั่ง: - ชิ้น</span>
+      </div>
+      <div class="w-20">
+        <input type="number" min="1" id="cart-item-qty-${idx}" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-center text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 font-bold text-slate-700" value="1">
+      </div>
+      <button type="button" onclick="removeCartItemRow(${idx})" class="text-rose-500 p-1 hover:bg-rose-50 rounded-lg">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      </button>
+    `;
+
+    container.appendChild(row);
+    populateCartRowProducts(idx);
+  }
+
+  function removeCartItemRow(idx) {
+    const container = document.getElementById("mform-cart");
+    const row = document.getElementById(`cart-row-${idx}`);
+    if (container.children.length > 1) {
+      row.remove();
+    } else {
+      alert("ต้องมีรายการสินค้าอย่างน้อย 1 รายการ");
+    }
+  }
+
+  function populateCartRowProducts(idx) {
+    let availableProducts = [];
+    const storeId = document.getElementById("mform-store").value;
+    const rSubtype = document.getElementById("mform-return-subtype").value;
+
+    if (currentDocType === "Restock") {
+      availableProducts = mProducts;
+    } else if (
+      currentDocType === "Consign" ||
+      (currentDocType === "Return" && rSubtype === "Sale_to_Company")
+    ) {
+      const stockInHand = mInventory.filter(
+        (i) =>
+          i.LocationType === "Sale_Stock" &&
+          isSameId(i.LocationID, currentUser.UserID) &&
+          Number(i.Quantity) > 0,
+      );
+      availableProducts = mProducts.filter((p) =>
+        stockInHand.some((i) => i.ProductID === p.ProductID),
+      );
+    } else if (
+      currentDocType === "Sale" ||
+      (currentDocType === "Return" && rSubtype === "Pharmacy_to_Sale")
+    ) {
+      const stockInStore = mInventory.filter(
+        (i) =>
+          i.LocationType === "Pharmacy_Stock" &&
+          isSameId(i.LocationID, storeId) &&
+          Number(i.Quantity) > 0,
+      );
+      availableProducts = mProducts.filter((p) =>
+        stockInStore.some((i) => i.ProductID === p.ProductID),
+      );
+    }
+
+    window[`cartAvailableProducts_${idx}`] = availableProducts;
+
+    const hiddenProd = document.getElementById(`cart-item-prod-${idx}`);
+    const searchInput = document.getElementById(`cart-item-search-${idx}`);
+
+    if (availableProducts.length === 0) {
+      hiddenProd.value = "";
+      searchInput.value = "";
+      searchInput.placeholder = "ไม่มีสินค้าให้เลือก";
+    } else {
+      hiddenProd.value = availableProducts[0].ProductID;
+      searchInput.value = `${availableProducts[0].ProductName || "ไม่มีชื่อสินค้า"} [${availableProducts[0].SKU || "ไม่มีรหัส"}] ฿${Number(availableProducts[0].Price || 0).toLocaleString()}`;
+      searchInput.placeholder = "พิมพ์ค้นหาสินค้า...";
+    }
+
+    renderProductOptions(idx, "");
+    updateRowLimitLabel(idx);
+  }
+
+  function renderProductOptions(idx, searchTxt) {
+    const container = document.getElementById(`cart-item-options-${idx}`);
+    if (!container) return;
+    const prods = window[`cartAvailableProducts_${idx}`] || [];
+    container.innerHTML = "";
+
+    const term = searchTxt.toLowerCase();
+    const filtered = prods.filter(
+      (p) =>
+        String(p.ProductName || "")
+          .toLowerCase()
+          .includes(term) ||
+        String(p.SKU || "")
+          .toLowerCase()
+          .includes(term),
+    );
+
+    if (filtered.length === 0) {
+      container.innerHTML = `<div class="p-2 text-xs text-slate-400 text-center">ไม่พบสินค้า</div>`;
+      return;
+    }
+
+    filtered.forEach((p) => {
+      const div = document.createElement("div");
+      div.className =
+        "px-3 py-2 border-b border-slate-100 text-[10px] font-semibold text-slate-700 hover:bg-emerald-50 cursor-pointer transition-colors";
+      div.textContent = `${p.ProductName || "ไม่มีชื่อสินค้า"} [${p.SKU || "ไม่มีรหัส"}] ฿${Number(p.Price || 0).toLocaleString()}`;
+      div.onclick = function () {
+        document.getElementById(`cart-item-prod-${idx}`).value = p.ProductID;
+        document.getElementById(`cart-item-search-${idx}`).value =
+          `${p.ProductName || "ไม่มีชื่อสินค้า"} [${p.SKU || "ไม่มีรหัส"}] ฿${Number(p.Price || 0).toLocaleString()}`;
+        container.classList.add("hidden");
+        updateRowLimitLabel(idx);
+      };
+      container.appendChild(div);
+    });
+  }
+
+  function filterProductOptions(idx) {
+    const txt = document.getElementById(`cart-item-search-${idx}`).value;
+    renderProductOptions(idx, txt);
+  }
+
+  function showProductOptions(idx) {
+    document
+      .querySelectorAll('[id^="cart-item-options-"]')
+      .forEach((el) => el.classList.add("hidden"));
+    const input = document.getElementById(`cart-item-search-${idx}`);
+    input.value = ""; // Auto-clear for easier searching on mobile
+    const hiddenInput = document.getElementById(`cart-item-prod-${idx}`);
+    if (hiddenInput) hiddenInput.value = "";
+    document
+      .getElementById(`cart-item-options-${idx}`)
+      .classList.remove("hidden");
+    renderProductOptions(idx, "");
+  }
+
+  document.addEventListener("click", function (e) {
+    const cart = document.getElementById("mform-cart");
+    if (!cart) return;
+    if (e.target.closest('[id^="cart-prod-container-"]')) return;
+    document
+      .querySelectorAll('[id^="cart-item-options-"]')
+      .forEach((el) => el.classList.add("hidden"));
+  });
+
+  function updateRowLimitLabel(idx) {
+    const hiddenProd = document.getElementById(`cart-item-prod-${idx}`);
+    const lbl = document.getElementById(`cart-item-limit-lbl-${idx}`);
+    if (!hiddenProd || !lbl) return;
+
+    const pId = hiddenProd.value;
+    const storeId = document.getElementById("mform-store").value;
+    const rSubtype = document.getElementById("mform-return-subtype").value;
+
+    let limit = Infinity;
+    let limitText = "ไม่จำกัด";
+
+    if (currentDocType === "Restock") {
+      limitText = "สั่งได้ไม่จำกัด (รอแอดมินอนุมัติ)";
+    } else if (
+      currentDocType === "Consign" ||
+      (currentDocType === "Return" && rSubtype === "Sale_to_Company")
+    ) {
+      const item = mInventory.find(
+        (i) =>
+          i.LocationType === "Sale_Stock" &&
+          isSameId(i.LocationID, currentUser.UserID) &&
+          i.ProductID === pId,
+      );
+      limit = item ? Number(item.Quantity) : 0;
+      limitText = `มีในสต็อกเซลล์: ${limit.toLocaleString()} ชิ้น`;
+    } else if (
+      currentDocType === "Sale" ||
+      (currentDocType === "Return" && rSubtype === "Pharmacy_to_Sale")
+    ) {
+      const item = mInventory.find(
+        (i) =>
+          i.LocationType === "Pharmacy_Stock" &&
+          String(i.LocationID) === String(storeId) &&
+          i.ProductID === pId,
+      );
+      limit = item ? Number(item.Quantity) : 0;
+      limitText = `มีหน้าร้านยา: ${limit.toLocaleString()} ชิ้น`;
+    }
+
+    lbl.textContent = limitText;
+    lbl.dataset.limit = limit;
+  }
+
+  function previewSlip(input) {
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
+      document.getElementById("mform-slip-label").textContent = file.name;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        document.getElementById("mform-slip-preview").src = e.target.result;
+        document
+          .getElementById("mform-slip-preview-container")
+          .classList.remove("hidden");
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function submitMobileForm() {
+    const submitBtn = document.getElementById("mform-submit-btn");
+    const storeId = document.getElementById("mform-store").value;
+    const rSubtype = document.getElementById("mform-return-subtype").value;
+    const remark = document.getElementById("mform-remark").value;
+
+    const items = [];
+    const cartRows = document.getElementById("mform-cart").children;
+
+    let hasValidationError = false;
+
+    for (let i = 0; i < cartRows.length; i++) {
+      const hiddenProd = cartRows[i].querySelector('input[type="hidden"]');
+      const inputSearch = cartRows[i].querySelector('input[type="text"]');
+      const inputQty = cartRows[i].querySelector('input[type="number"]');
+      const limitLbl = cartRows[i].querySelector("span");
+
+      if (hiddenProd && inputQty && limitLbl) {
+        const qty = Number(inputQty.value);
+        const limit = Number(limitLbl.dataset.limit);
+        const pId = hiddenProd.value;
+
+        if (!pId || pId === "") {
+          alert("ไม่สามารถทำรายการได้ เนื่องจากไม่มีสินค้าให้เลือกในบางรายการ");
+          hasValidationError = true;
+          break;
+        }
+
+        if (isNaN(qty) || qty <= 0) {
+          alert("กรุณาระบุจำนวนสินค้าให้ถูกต้อง (มากกว่า 0)");
+          hasValidationError = true;
+          break;
+        }
+
+        if (qty > limit) {
+          const prodName = inputSearch ? inputSearch.value : pId;
+          alert(
+            `ไม่สามารถทำรายการได้เนื่องจากมีสินค้าไม่พอ: ${prodName} ต้องการ ${qty} ชิ้นแต่พร้อมใช้งาน ${limit} ชิ้น`,
+          );
+          hasValidationError = true;
+          break;
+        }
+
+        items.push({
+          ProductID: pId,
+          Quantity: qty,
+          CreatedBy: currentUser.UserID,
+        });
+      }
+    }
+
+    if (hasValidationError || items.length === 0) return;
+
+    const slipInput = document.getElementById("mform-slip-input");
+    let base64Image = "";
+    let fileName = "";
+
+    if (currentDocType === "Sale") {
+      if (!slipInput.files || slipInput.files.length === 0) {
+        alert("กรุณาถ่ายรูปสลิปหรือหลักฐานแนบส่ง!");
+        return;
+      }
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> กำลังส่งข้อมูล...`;
+
+    let locationId = currentUser.UserID;
+    if (currentDocType === "Consign" || currentDocType === "Sale") {
+      locationId = storeId;
+    } else if (currentDocType === "Return") {
+      if (rSubtype === "Pharmacy_to_Sale") {
+        locationId = storeId;
+      } else {
+        locationId = currentUser.UserID;
+      }
+    }
+
+    const nextStep = function (imgB64) {
+      google.script.run
+        .withSuccessHandler(function (res) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "ส่งคำขอ";
+          closeForm();
+          document.getElementById("m-success-docno").textContent = res.docNo;
+          document.getElementById("m-success-modal").classList.remove("hidden");
+          setTimeout(() => refreshMobileData(), 100);
+        })
+        .withFailureHandler(function (err) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "ส่งคำขอ";
+          alert("เกิดข้อผิดพลาดในการส่งรายการ: " + err.message);
+        })
+        .submitTransaction(
+          currentDocType,
+          currentDocType === "Return" ? rSubtype : "N/A",
+          locationId,
+          items,
+          imgB64,
+          fileName,
+          remark,
+        );
+    };
+
+    if (slipInput.files && slipInput.files[0]) {
+      const file = slipInput.files[0];
+      fileName = file.name;
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        nextStep(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      nextStep("");
+    }
+  }
+</script>

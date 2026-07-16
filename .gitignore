@@ -1,0 +1,52 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# env / secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# drizzle
+packages/db/drizzle/meta/_journal.json.bak
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# turbo
+.turbo/
+
+# expo / react native
+apps/mobile/.expo/
+apps/mobile/web-build/
+
+# testing
+coverage/
+
+# docker volumes (local)
+.docker-data/
+
+# legacy Google Apps Script system (kept for reference)
+# Wesell OTC/
+
+# stray tsc output at package root
+packages/db/drizzle.config.js
+packages/db/drizzle.config.d.ts
+packages/db/drizzle.config.js.map

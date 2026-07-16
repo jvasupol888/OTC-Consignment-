@@ -1,0 +1,132 @@
+<div id="login-panel" class="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#f4fbf7] via-[#ffffff] to-[#e8f5e9] p-4 fade-in">
+  <!-- Subtle decorative light-green blur shapes -->
+  <div class="absolute top-24 left-24 w-72 h-72 bg-emerald-100/40 rounded-full blur-3xl"></div>
+  <div class="absolute bottom-24 right-24 w-72 h-72 bg-green-100/40 rounded-full blur-3xl"></div>
+
+  <div class="w-full max-w-md bg-white border border-slate-100 rounded-3xl shadow-xl shadow-emerald-950/5 p-8 text-slate-800 relative overflow-hidden">
+    
+    <div class="relative z-10 text-center mb-8">
+      <!-- Corporate Logo -->
+      <div class="mb-4">
+        <img 
+          src="https://vulcancoalition.com/wp-content/uploads/2024/11/Nutrition-New.webp" 
+          alt="Nutrition Profess Logo" 
+          class="h-16 mx-auto object-contain"
+        >
+      </div>
+      <h1 class="text-xl font-bold tracking-wide text-slate-800">Wesell Consignment</h1>
+      <p class="text-slate-500 text-xs mt-1 uppercase font-semibold tracking-wider">Nutrition Profess Co., Ltd.</p>
+    </div>
+
+    <!-- Error Alert Box -->
+    <div id="login-error" class="hidden mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl flex items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <span id="login-error-text">ข้อมูลผู้ใช้ไม่ถูกต้อง</span>
+    </div>
+
+    <form id="login-form" onsubmit="handleLoginSubmit(event)" class="space-y-5">
+      <div>
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2" for="username">Username</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </span>
+          <input 
+            type="text" 
+            id="username" 
+            required 
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent focus:bg-white transition-all duration-200 text-sm font-semibold"
+            placeholder="กรอกชื่อผู้ใช้งาน"
+          >
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2" for="password">Password</label>
+        <div class="relative">
+          <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </span>
+          <input 
+            type="password" 
+            id="password" 
+            required 
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent focus:bg-white transition-all duration-200 text-sm font-semibold"
+            placeholder="กรอกรหัสผ่าน"
+          >
+        </div>
+      </div>
+
+      <button 
+        type="submit" 
+        id="login-btn"
+        class="w-full py-4 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 text-sm"
+      >
+        <span>เข้าสู่ระบบ</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  function handleLoginSubmit(event) {
+    event.preventDefault();
+    const userEl = document.getElementById('username');
+    const passEl = document.getElementById('password');
+    const btnEl = document.getElementById('login-btn');
+    const errEl = document.getElementById('login-error');
+    const errTextEl = document.getElementById('login-error-text');
+    
+    btnEl.disabled = true;
+    btnEl.innerHTML = `
+      <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span>กำลังตรวจสอบข้อมูล...</span>
+    `;
+    errEl.classList.add('hidden');
+    
+    google.script.run
+      .withSuccessHandler(function(response) {
+        btnEl.disabled = false;
+        btnEl.innerHTML = `
+          <span>เข้าสู่ระบบ</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        `;
+        
+        if (response.success) {
+          sessionStorage.setItem('otc_user', JSON.stringify(response.user));
+          routeBasedOnRole(response.user);
+        } else {
+          errTextEl.textContent = response.message;
+          errEl.classList.remove('hidden');
+          passEl.value = '';
+          passEl.focus();
+        }
+      })
+      .withFailureHandler(function(err) {
+        btnEl.disabled = false;
+        btnEl.innerHTML = `
+          <span>เข้าสู่ระบบ</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        `;
+        errTextEl.textContent = "เชื่อมต่อระบบล้มเหลว: " + err.message;
+        errEl.classList.remove('hidden');
+      })
+      .loginUser(userEl.value, passEl.value);
+  }
+</script>

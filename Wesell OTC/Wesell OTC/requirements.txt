@@ -1,0 +1,111 @@
+เอกสารออกแบบโครงสร้างและสรุปขั้นตอนการทำงานระบบฝากขายสินค้า OTC
+สำหรับ: ทีม Implement, Nutrition Profess Pub Co., Ltd.
+เอกสารฉบับนี้รวบรวมโครงสร้างสถาปัตยกรรมระบบ โครงสร้างฐานข้อมูล และสรุปขั้นตอนการทำงาน เพื่อส่งต่อให้ทีมพัฒนาดำเนินการสร้างระบบฝากขายสินค้า OTC ทั้งในส่วนของ Mobile App และ Web App
+1. สถาปัตยกรรมระบบ (System Architecture)
+Web Application (Admin Panel): แนะนำให้พัฒนาด้วย Framework เช่น Next.js เพื่อรองรับการจัดการ Master Data ที่ซับซ้อน การเขียน Logic สำหรับคำนวณสต็อก การสร้างไฟล์ PDF และการ Import/Export ไฟล์ .xlsx
+Mobile Application (Sale App): พัฒนาเป็น Custom Application ที่รองรับการจำกัดสิทธิ์ (Row-Level Security) เพื่อให้พนักงานแต่ละคนมองเห็นเฉพาะข้อมูลและร้านค้าของตนเอง พร้อมรองรับการอัปโหลดรูปภาพ/สลิปหลักฐานจากกล้องมือถือ
+Reporting & Analytics: ออกแบบโครงสร้างฐานข้อมูลให้พร้อมสำหรับการเชื่อมต่อกับเครื่องมือทำรีพอร์ต เช่น Looker Studio เพื่อสร้าง Dashboard สรุปยอดขายและการเคลื่อนไหวของสต็อกแบบ Real-time ให้ผู้บริหารดูได้ง่ายขึ้น
+2. โครงสร้างฐานข้อมูล (Database Schema)
+ออกแบบโดยใช้หลักการ Relational Database เพื่อคุมสต็อก 2 เลเยอร์ (Sale Stock และ Pharmacy Stock) อย่างรัดกุม
+2.1 ตารางผู้ใช้งาน (tb_users)
+Field Name
+Data Type
+Description
+UserID (PK)
+String
+รหัสพนักงาน
+Username
+String
+ชื่อผู้ใช้งาน
+Password
+String
+รหัสผ่าน (ควรเข้ารหัส)
+Role
+String
+ระดับสิทธิ์ (Admin, OTC_Sale)
+
+2.2 ตารางข้อมูลสินค้า (tb_products)
+Field Name
+Data Type
+Description
+ProductID (PK)
+String
+รหัสระบบ
+SKU
+String
+รหัสสินค้า (ใช้ตรวจสอบเพื่อป้องกัน Import ซ้ำ)
+ProductName
+String
+ชื่อสินค้า
+Price
+Decimal
+ราคาขาย
+Qtr_EndDate
+Date
+วันที่สิ้นสุดไตรมาส (ใช้เพื่อแจ้งเตือนหมดอายุ)
+
+2.3 ตารางข้อมูลร้านค้า (tb_stores)
+Field Name
+Data Type
+Description
+StoreID (PK)
+String
+รหัสร้านค้า
+StoreName
+String
+ชื่อร้านค้า
+Location
+String
+ตำแหน่งเก็บสินค้า
+Assigned_UserID (FK)
+String
+รหัสเซลล์ที่ดูแล (อัปเดตทันทีเมื่อมีการโอนย้าย)
+
+2.4 ตารางคลังสต็อก (tb_inventory)
+Field Name
+Data Type
+Description
+InvID (PK)
+String
+รหัสรายการสต็อก
+ProductID (FK)
+String
+รหัสสินค้า
+LocationType
+String
+ประเภทคลัง (Sale_Stock, Pharmacy_Stock)
+Quantity
+Integer
+จำนวนคงเหลือจริง
+
+2.5 ตารางเอกสารธุรกรรม (tb_transactions)
+Field Name
+Data Type
+Description
+DocNo (PK)
+String
+เลขที่เอกสาร
+DocType
+String
+ประเภท (Restock, Consign, Sale, Return)
+Status
+String
+สถานะ (Pending, Approved, Cansaleed)
+EvidenceImg
+String
+URL ของรูปภาพหลักฐาน/สลิป
+
+3. สรุปขั้นตอนการทำงาน (Workflow Summary)
+Phase 1: การจัดการข้อมูลหลัก (Master Data Setup)
+แอดมินสร้าง Username และ Password ให้พนักงานเข้าใช้งานระบบ
+แอดมิน Import ข้อมูลสินค้า และ ข้อมูลร้านค้า ผ่านไฟล์ .xlsx หรือเพิ่มทีละรายการ โดยระบบต้องมี Validation ป้องกันข้อมูลซ้ำอย่างเด็ดขาด
+Phase 2: การทำธุรกรรม (Transaction & Operations)
+เติมของเข้าสต็อก: พนักงานทำรายการเบิก -> แอดมินอนุมัติ -> สต็อกของเซลล์เพิ่มขึ้น
+ฝากขายสินค้า: พนักงานเลือกร้านค้าและสินค้าที่ต้องการฝากขาย (โดยจะต้องมีของในสต็อกเซลล์เท่านั้น) -> แอดมินอนุมัติ -> ตัดสต็อกเซลล์ เพิ่มสต็อกร้านขายยา
+ขายสินค้าได้จริง: พนักงานทำรายการขายโดยแนบหลักฐานรูปถ่าย (เลือกระบุจำนวนจากสินค้าที่มีอยู่จริงในร้านค้านั้น) -> แอดมินอนุมัติ -> ตัดสต็อกร้านขายยา
+คืนสินค้า: พนักงานทำรายการคืน -> แอดมินอนุมัติ -> ปรับสต็อกกลับตามเงื่อนไข
+Phase 3: การตรวจสอบและส่งออกข้อมูล (Approve & Export)
+การปรับสต็อกทุกประเภทจะเกิดขึ้นได้ก็ต่อเมื่อแอดมินกด อนุมัติ เท่านั้น เพื่อป้องกันข้อผิดพลาดจากการคีย์ข้อมูล
+หากแอดมินกด ยกเลิก เอกสารหลังจากที่อนุมัติไปแล้ว ระบบจะต้องทำการ Rollback คืนสต็อกกลับไปสถานะเดิมก่อนอนุมัติ
+แอดมินสามารถสั่ง Generate PDF ของรายการต่างๆ เพื่อนำไปเปิดบิลต่อในระบบ ERP (Bplus)
+แอดมินสามารถโอนย้ายร้านค้าจากเซลล์ที่ลาออกไปให้เซลล์คนใหม่ดูแล สิทธิ์การมองเห็นร้านค้าในแอปจะถูกโอนย้ายไปยังเซลล์คนใหม่ทันที

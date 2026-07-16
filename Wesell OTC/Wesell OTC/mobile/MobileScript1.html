@@ -1,0 +1,474 @@
+<script>
+  let activeMobileTab = "salestock";
+  let mProducts = [];
+  let mStores = [];
+  let mInventory = [];
+  let mTransactions = [];
+  let currentDocType = "Consign";
+
+  function isSameId(id1, id2) {
+    const s1 = String(id1 || "").trim();
+    const s2 = String(id2 || "").trim();
+    if (s1 === s2) return true;
+    if (s1 !== "" && s2 !== "" && !isNaN(s1) && !isNaN(s2)) {
+      return Number(s1) === Number(s2);
+    }
+    return false;
+  }
+
+  window.initializeMobilePanel = function () {
+    try {
+      document.getElementById("view-login").classList.add("hidden");
+      document.getElementById("view-mobile").classList.remove("hidden");
+
+      if (currentUser) {
+        const nameEl = document.getElementById("mobile-user-name");
+        if (nameEl) {
+          nameEl.textContent = currentUser.FullName || currentUser.Username;
+        }
+        refreshMobileData();
+      } else {
+        showLoginView();
+      }
+    } catch (e) {
+      console.error("initializeMobilePanel CRASH: " + e.message);
+    }
+  };
+
+  function refreshMobileData() {
+    const btnIcon = document.querySelector("#m-header-refresh-btn svg");
+    if (btnIcon) btnIcon.classList.add("animate-spin");
+
+    google.script.run
+      .withSuccessHandler(function (rawData) {
+        if (btnIcon) btnIcon.classList.remove("animate-spin");
+        try {
+          if (!rawData) throw new Error("ไม่พบข้อมูลจากเซิร์ฟเวอร์");
+          let data =
+            typeof rawData === "string" ? JSON.parse(rawData) : rawData;
+          if (data.error)
+            throw new Error("Server Error: " + data.error + "\n" + data.stack);
+
+          mProducts = data.products || [];
+          mStores = (data.stores || []).filter((s) =>
+            isSameId(s.Assigned_UserID, currentUser.UserID),
+          );
+          mInventory = data.inventory || [];
+          mTransactions = (data.transactions || []).filter((t) =>
+            isSameId(t.CreatedBy, currentUser.UserID),
+          );
+
+          populateMobileStores();
+          renderMobileStock();
+          renderMobileHistory();
+        } catch (e) {
+          const errDiv = `<div class="text-red-500 text-center py-4 text-xs font-bold bg-red-50 rounded-xl border border-red-200">Error (UI): ${e.message}</div>`;
+          document.getElementById("m-inhand-list").innerHTML = errDiv;
+          document.getElementById("m-pharmacy-consign-list").innerHTML = errDiv;
+          document.getElementById("m-history-list").innerHTML = errDiv;
+        }
+      })
+      .withFailureHandler(function (err) {
+        if (btnIcon) btnIcon.classList.remove("animate-spin");
+        const errDiv = `<div class="text-red-500 text-center py-4 text-xs font-bold bg-red-50 rounded-xl border border-red-200">GAS Error: ${err.message}</div>`;
+        document.getElementById("m-inhand-list").innerHTML = errDiv;
+        document.getElementById("m-pharmacy-consign-list").innerHTML = errDiv;
+        document.getElementById("m-history-list").innerHTML = errDiv;
+      })
+      .getAllMobileData();
+  }
+
+  function switchMobileTab(tab) {
+    activeMobileTab = tab;
+    const tabs = ["salestock", "pharmstock", "actions", "history"];
+    tabs.forEach((t) => {
+      document.getElementById(`msec-${t}`).classList.add("hidden");
+      document.getElementById(`m-nav-${t}`).className =
+        "flex-1 flex flex-col items-center justify-center py-2 text-slate-400 hover:text-emerald-600 transition-all";
+    });
+
+    document.getElementById(`msec-${tab}`).classList.remove("hidden");
+    document.getElementById(`m-nav-${tab}`).className =
+      "flex-1 flex flex-col items-center justify-center py-2 text-emerald-600 font-bold transition-all";
+
+    // Fetch fresh data implicitly
+    refreshMobileData();
+  }
+
+  function renderMobileStock() {
+    const listContainer = document.getElementById("m-inhand-list");
+    listContainer.innerHTML = "";
+
+    const inHand = mInventory.filter(
+      (i) =>
+        i.LocationType === "Sale_Stock" &&
+        isSameId(i.LocationID, currentUser.UserID) &&
+        Number(i.Quantity) > 0,
+    );
+    let totalInHand = 0;
+    let totalInHandValue = 0;
+
+    if (inHand.length === 0) {
+      listContainer.innerHTML = `<div class="text-center py-8 text-slate-400 bg-white rounded-2xl border border-slate-200 text-xs font-semibold">ไม่มีสินค้าคงเหลือในคลังของคุณ</div>`;
+    } else {
+      inHand.forEach((item) => {
+        const prod = mProducts.find((p) => p.ProductID === item.ProductID);
+        const qty = Number(item.Quantity);
+        totalInHand += qty;
+        if (prod) totalInHandValue += qty * Number(prod.Price || 0);
+
+        const el = document.createElement("div");
+        el.className =
+          "bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between";
+        el.innerHTML = `
+          <div>
+            <h4 class="font-bold text-slate-800 text-xs">${prod ? prod.ProductName : item.ProductID} <span class="text-emerald-600 font-bold ml-1">฿${prod ? Number(prod.Price || 0).toLocaleString() : 0}</span></h4>
+            <span class="text-[10px] text-slate-400 font-bold uppercase">SKU: ${prod ? prod.SKU : "-"}</span>
+          </div>
+          <div class="text-right">
+            <span class="text-[9px] text-slate-400 font-bold">คงเหลือ</span>
+            <p class="text-base font-black text-emerald-600">${qty.toLocaleString()}</p>
+          </div>
+        `;
+        listContainer.appendChild(el);
+      });
+    }
+
+    const countEl = document.getElementById("m-sale-stock-count");
+    if (countEl) countEl.textContent = totalInHand.toLocaleString();
+    const valEl = document.getElementById("m-sale-stock-value");
+    if (valEl) valEl.textContent = "฿" + totalInHandValue.toLocaleString();
+
+    let totalPharm = 0;
+    let totalPharmValue = 0;
+    const pharmContainer = document.getElementById("m-pharmacy-consign-list");
+    pharmContainer.innerHTML = "";
+
+    if (mStores.length === 0) {
+      pharmContainer.innerHTML = `<div class="text-center py-8 text-slate-400 bg-white rounded-2xl border border-slate-200 text-xs font-semibold">คุณไม่มีร้านขายยาที่ได้รับมอบหมายดูแล</div>`;
+      const pCount = document.getElementById("m-pharm-stock-count");
+      if (pCount) pCount.textContent = "0";
+      return;
+    }
+
+    const pCountEl = document.getElementById("m-pharm-stock-count");
+    if (pCountEl) pCountEl.textContent = "-";
+    const pValueEl = document.getElementById("m-pharm-stock-value");
+    if (pValueEl) pValueEl.textContent = "-";
+
+    let html = `
+      <div class="mb-4 relative">
+        <label class="block text-[10px] font-bold text-slate-500 mb-1">ค้นหาร้านค้าเพื่อดูสต็อก</label>
+        <input type="hidden" id="m-dashboard-store-id">
+        <input type="text" id="m-dashboard-store-search" onfocus="showDashboardStoreOptions()" oninput="filterDashboardStoreOptions()" placeholder="พิมพ์ชื่อร้านค้าเพื่อค้นหา..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs text-slate-700 placeholder-slate-400">
+        
+        <div id="m-dashboard-store-dropdown" class="hidden absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+    `;
+
+    mStores.forEach((store) => {
+      html += `
+          <div class="px-4 py-3 border-b border-slate-100 cursor-pointer hover:bg-emerald-50 store-opt" data-id="${store.StoreID}" data-name="${store.StoreName}" onclick="selectDashboardStore('${store.StoreID}', '${store.StoreName}')">
+            <div class="font-bold text-xs text-slate-700">${store.StoreName}</div>
+            <div class="text-[9px] text-slate-400">${store.Location}</div>
+          </div>
+      `;
+    });
+
+    html += `
+        </div>
+      </div>
+      <div id="m-dashboard-store-stock-container"></div>
+    `;
+    pharmContainer.innerHTML = html;
+  }
+
+  function showDashboardStoreOptions() {
+    const searchInput = document.getElementById("m-dashboard-store-search");
+    if (searchInput) searchInput.value = "";
+    const hiddenId = document.getElementById("m-dashboard-store-id");
+    if (hiddenId) hiddenId.value = "";
+    document
+      .getElementById("m-dashboard-store-dropdown")
+      .classList.remove("hidden");
+    filterDashboardStoreOptions();
+  }
+
+  function filterDashboardStoreOptions() {
+    const term = document
+      .getElementById("m-dashboard-store-search")
+      .value.toLowerCase();
+    const opts = document.querySelectorAll(
+      "#m-dashboard-store-dropdown .store-opt",
+    );
+    opts.forEach((el) => {
+      const name = el.getAttribute("data-name").toLowerCase();
+      if (name.includes(term)) {
+        el.style.display = "block";
+      } else {
+        el.style.display = "none";
+      }
+    });
+  }
+
+  function selectDashboardStore(id, name) {
+    document.getElementById("m-dashboard-store-id").value = id;
+    document.getElementById("m-dashboard-store-search").value = name;
+    document
+      .getElementById("m-dashboard-store-dropdown")
+      .classList.add("hidden");
+    renderDashboardStoreStock(id);
+  }
+
+  document.addEventListener("click", function (e) {
+    const searchInput = document.getElementById("m-dashboard-store-search");
+    const dropdown = document.getElementById("m-dashboard-store-dropdown");
+    if (searchInput && dropdown) {
+      if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.add("hidden");
+      }
+    }
+  });
+
+  function renderDashboardStoreStock(storeId) {
+    const container = document.getElementById(
+      "m-dashboard-store-stock-container",
+    );
+
+    if (!storeId) {
+      container.innerHTML = "";
+      document.getElementById("m-pharm-stock-count").textContent = "-";
+      document.getElementById("m-pharm-stock-value").textContent = "-";
+      return;
+    }
+
+    const store = mStores.find((s) => s.StoreID === storeId);
+    const storeStock = mInventory.filter(
+      (i) =>
+        i.LocationType === "Pharmacy_Stock" &&
+        isSameId(i.LocationID, storeId) &&
+        Number(i.Quantity) > 0,
+    );
+    
+    let storeTotalQty = 0;
+    let storeTotalVal = 0;
+
+    let stockRowsHtml = "";
+    if (storeStock.length === 0) {
+      stockRowsHtml = `<div class="text-[10px] text-slate-400 py-6 text-center font-bold">ไม่มีสินค้าฝากขายคงเหลือในร้านนี้</div>`;
+    } else {
+      storeStock.forEach((item) => {
+        const prod = mProducts.find((p) => p.ProductID === item.ProductID);
+        const qty = Number(item.Quantity);
+        storeTotalQty += qty;
+        if (prod) storeTotalVal += qty * Number(prod.Price || 0);
+        
+        stockRowsHtml += `
+          <div class="flex items-center justify-between py-3 border-b border-slate-100 last:border-0">
+            <div>
+              <span class="font-bold text-xs text-slate-700">${prod ? prod.ProductName : item.ProductID}</span> <span class="text-[10px] text-emerald-600 font-bold ml-1">฿${prod ? Number(prod.Price || 0).toLocaleString() : 0}</span><br>
+              <span class="text-[9px] text-slate-400">SKU: ${prod ? prod.SKU : "-"}</span>
+            </div>
+            <span class="font-bold text-xs text-emerald-600">${qty.toLocaleString()} ชิ้น</span>
+          </div>
+        `;
+      });
+    }
+
+    document.getElementById("m-pharm-stock-count").textContent = storeTotalQty.toLocaleString();
+    document.getElementById("m-pharm-stock-value").textContent = "฿" + storeTotalVal.toLocaleString();
+
+    container.innerHTML = `
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden fade-in">
+        <div class="px-4 py-3 bg-emerald-50/20 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h4 class="font-bold text-slate-800 text-xs">${store.StoreName}</h4>
+            <span class="text-[9px] text-slate-400">${store.Location}</span>
+          </div>
+        </div>
+        <div class="p-4">
+          ${stockRowsHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  function toggleAccordion(id) {
+    const el = document.getElementById(`content-${id}`);
+    const arrow = document.getElementById(`arrow-${id}`);
+    if (el.classList.contains("hidden")) {
+      el.classList.remove("hidden");
+      arrow.classList.add("rotate-180");
+    } else {
+      el.classList.add("hidden");
+      arrow.classList.remove("rotate-180");
+    }
+  }
+
+  function renderMobileHistory() {
+    const container = document.getElementById("m-history-list");
+    container.innerHTML = "";
+
+    if (mTransactions.length === 0) {
+      container.innerHTML = `<div class="text-center py-8 text-slate-400 bg-white rounded-2xl border border-slate-200 text-xs">ไม่มีประวัติการทำรายการ</div>`;
+      return;
+    }
+
+    const unique = [];
+    const seen = new Set();
+    mTransactions.forEach((item) => {
+      if (!seen.has(item.DocNo)) {
+        seen.add(item.DocNo);
+        unique.push(item);
+      }
+    });
+
+    unique.forEach((tx) => {
+      const el = document.createElement("div");
+      el.className =
+        "bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3 cursor-pointer hover:bg-slate-50 transition-colors";
+      el.onclick = () => openMobileTxnModal(tx.DocNo);
+
+      let typeBadge = "";
+      if (tx.DocType === "Restock")
+        typeBadge = "bg-blue-50 text-blue-700 border border-blue-100";
+      else if (tx.DocType === "Consign")
+        typeBadge = "bg-indigo-50 text-indigo-700 border border-indigo-100";
+      else if (tx.DocType === "Sale")
+        typeBadge = "bg-emerald-50 text-emerald-700 border border-emerald-100";
+      else if (tx.DocType === "Return")
+        typeBadge = "bg-purple-50 text-purple-700 border border-purple-100";
+
+      let statusBadge = "";
+      if (tx.Status === "Pending") statusBadge = "bg-amber-100 text-amber-800";
+      else if (tx.Status === "Approved")
+        statusBadge = "bg-emerald-100 text-emerald-800";
+      else if (tx.Status === "Cansaleed")
+        statusBadge = "bg-rose-100 text-rose-800";
+
+      const lines = mTransactions.filter((t) => t.DocNo === tx.DocNo);
+      let itemsSummary = lines
+        .map((line) => {
+          const prod = mProducts.find((p) => p.ProductID === line.ProductID);
+          return `${prod ? prod.ProductName : line.ProductID} [${prod ? prod.SKU : "-"}] ฿${prod ? Number(prod.Price || 0).toLocaleString() : 0} (x${line.Quantity})`;
+        })
+        .join(", ");
+
+      const dest =
+        tx.DocType === "Restock" ||
+        (tx.DocType === "Return" && tx.ReturnSubtype === "Sale_to_Company")
+          ? "คลังในมือเซลล์"
+          : mStores.find((s) => s.StoreID === tx.LocationID)
+            ? mStores.find((s) => s.StoreID === tx.LocationID).StoreName
+            : tx.LocationID;
+
+      el.innerHTML = `
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold text-slate-400">${tx.Timestamp}</span>
+          <span class="px-2 py-0.5 rounded text-[9px] font-bold ${statusBadge}">${tx.Status}</span>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="px-2 py-0.5 rounded text-[9px] font-bold ${typeBadge}">${tx.DocType}</span>
+            <span class="text-xs font-black text-slate-800">${tx.DocNo}</span>
+          </div>
+          <p class="text-[10px] text-slate-500 mt-1 font-semibold truncate">เป้าหมาย: ${dest}</p>
+          <p class="text-[10px] text-slate-500 mt-1 font-normal line-clamp-2">รายการ: ${itemsSummary}</p>
+          ${tx.Remark ? `<p class="text-[10px] text-slate-500 mt-1 font-normal line-clamp-2">หมายเหตุ: ${tx.Remark}</p>` : ""}
+        </div>
+      `;
+      container.appendChild(el);
+    });
+  }
+
+  function populateMobileStores() {
+    const select = document.getElementById("mform-store");
+    select.innerHTML = "";
+    mStores.forEach((s) => {
+      const opt = document.createElement("option");
+      opt.value = s.StoreID;
+      opt.textContent = s.StoreName;
+      select.appendChild(opt);
+    });
+  }
+
+  function openMobileTxnModal(docNo) {
+    const tx = mTransactions.find((t) => t.DocNo === docNo);
+    if (!tx) return;
+
+    document.getElementById("m-txndetail-docno").textContent = tx.DocNo;
+    document.getElementById("m-txndetail-date").textContent = tx.Timestamp;
+    document.getElementById("m-txndetail-type").textContent = tx.DocType;
+    document.getElementById("m-txndetail-status").textContent = tx.Status;
+
+    let typeBadge = "";
+    if (tx.DocType === "Restock") typeBadge = "bg-blue-50 text-blue-700 border border-blue-100";
+    else if (tx.DocType === "Consign") typeBadge = "bg-indigo-50 text-indigo-700 border border-indigo-100";
+    else if (tx.DocType === "Sale") typeBadge = "bg-emerald-50 text-emerald-700 border border-emerald-100";
+    else if (tx.DocType === "Return") typeBadge = "bg-purple-50 text-purple-700 border border-purple-100";
+    document.getElementById("m-txndetail-type").className = `px-2 py-1 rounded text-[10px] font-bold ${typeBadge}`;
+
+    let statusBadge = "";
+    if (tx.Status === "Pending") statusBadge = "bg-amber-100 text-amber-800";
+    else if (tx.Status === "Approved") statusBadge = "bg-emerald-100 text-emerald-800";
+    else if (tx.Status === "Cansaleed") statusBadge = "bg-rose-100 text-rose-800";
+    document.getElementById("m-txndetail-status").className = `px-2 py-1 rounded text-[10px] font-bold ${statusBadge}`;
+
+    const dest = tx.DocType === "Restock" || (tx.DocType === "Return" && tx.ReturnSubtype === "Sale_to_Company")
+      ? "คลังในมือเซลล์"
+      : mStores.find((s) => s.StoreID === tx.LocationID)
+        ? mStores.find((s) => s.StoreID === tx.LocationID).StoreName
+        : tx.LocationID;
+    document.getElementById("m-txndetail-dest").textContent = dest;
+
+    const lines = mTransactions.filter((t) => t.DocNo === tx.DocNo);
+    let itemsHtml = "";
+    let totalVal = 0;
+    
+    lines.forEach(line => {
+      const prod = mProducts.find((p) => p.ProductID === line.ProductID);
+      const name = prod ? prod.ProductName : line.ProductID;
+      const sku = prod ? prod.SKU : "-";
+      const price = prod ? Number(prod.Price || 0) : 0;
+      const qty = Number(line.Quantity);
+      const lineTotal = price * qty;
+      totalVal += lineTotal;
+      
+      itemsHtml += `
+        <div class="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+          <div>
+            <div class="text-[11px] font-bold text-slate-700">${name}</div>
+            <div class="text-[9px] text-slate-400">SKU: ${sku} | ฿${price.toLocaleString()}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-[11px] font-bold text-slate-800">x${qty}</div>
+            <div class="text-[9px] font-bold text-emerald-600">฿${lineTotal.toLocaleString()}</div>
+          </div>
+        </div>
+      `;
+    });
+    
+    document.getElementById("m-txndetail-items").innerHTML = itemsHtml;
+    document.getElementById("m-txndetail-total").textContent = "฿" + totalVal.toLocaleString();
+
+    if (tx.Remark) {
+      document.getElementById("m-txndetail-remark-container").classList.remove("hidden");
+      document.getElementById("m-txndetail-remark").textContent = tx.Remark;
+    } else {
+      document.getElementById("m-txndetail-remark-container").classList.add("hidden");
+    }
+
+    if (tx.ApprovedBy) {
+      document.getElementById("m-txndetail-approval-container").classList.remove("hidden");
+      document.getElementById("m-txndetail-approver").textContent = tx.ApprovedBy;
+      document.getElementById("m-txndetail-approvetime").textContent = tx.ApprovedTimestamp;
+    } else {
+      document.getElementById("m-txndetail-approval-container").classList.add("hidden");
+    }
+
+    document.getElementById("m-txndetail-modal").classList.remove("hidden");
+  }
+
+  function closeMobileTxnModal() {
+    document.getElementById("m-txndetail-modal").classList.add("hidden");
+  }
+</script>

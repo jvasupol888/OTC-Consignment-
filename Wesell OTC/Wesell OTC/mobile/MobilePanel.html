@@ -1,0 +1,672 @@
+<!-- Mobile Panel Section (Targeted for mobile layout) -->
+<div
+  id="mobile-panel"
+  class="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50 text-slate-800"
+>
+  <!-- Mobile Header (Redesigned to White-Green theme with Logo) -->
+  <header
+    class="bg-white border-b border-slate-200 px-5 py-3 shrink-0 flex items-center justify-between shadow-sm"
+  >
+    <div class="flex items-center gap-3">
+      <img
+        src="https://vulcancoalition.com/wp-content/uploads/2024/11/Nutrition-New.webp"
+        alt="Nutrition Profess Logo"
+        class="h-8 object-contain"
+      />
+      <div class="border-l border-slate-200 pl-3">
+        <h2
+          id="mobile-user-name"
+          class="font-bold text-xs text-slate-800 leading-tight"
+        >
+          -
+        </h2>
+        <span
+          class="text-[9px] text-emerald-600 uppercase font-bold tracking-wider"
+          >Consign Management</span
+        >
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <!-- Refresh Button -->
+      <button
+        onclick="refreshMobileData()"
+        id="m-header-refresh-btn"
+        class="flex items-center justify-center w-8 h-8 bg-gradient-to-tr from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 text-emerald-600 shadow-sm border border-emerald-100/50 rounded-full active:scale-90 transition-all"
+        title="รีเฟรชข้อมูล"
+      >
+        <svg
+          class="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+          />
+        </svg>
+      </button>
+
+      <!-- Logout Button -->
+      <button
+        onclick="logout()"
+        class="flex items-center justify-center w-8 h-8 bg-gradient-to-tr from-rose-50 to-pink-50 hover:from-rose-100 hover:to-pink-100 text-rose-500 shadow-sm border border-rose-100/50 rounded-full active:scale-90 transition-all"
+        title="ออกจากระบบ"
+      >
+        <svg
+          class="w-4 h-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+          />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Scrollable Screen Area -->
+  <main
+    class="flex-1 overflow-y-auto pb-24 p-4 space-y-4"
+    id="mobile-screen-content"
+  >
+    <!-- SECTION 1: SALE STOCK -->
+    <div id="msec-salestock" class="space-y-4 fade-in">
+      <!-- Summary In Hand Card (Redesigned to Emerald Gradient) -->
+      <div
+        class="bg-gradient-to-tr from-emerald-600 to-emerald-700 rounded-3xl p-5 text-white shadow-lg shadow-emerald-600/20"
+      >
+        <span
+          class="text-xs font-bold text-emerald-100 uppercase tracking-wider"
+          >สต็อกสินค้าส่วนตัวเซลล์</span
+        >
+        <div class="flex items-end justify-between mt-2">
+          <div>
+            <div class="text-[10px] text-emerald-200 font-semibold mb-1">จำนวนทั้งหมด</div>
+            <h3 class="text-3xl font-black"><span id="m-sale-stock-count">0</span><span class="text-sm font-normal ml-1 text-emerald-200">ชิ้น</span></h3>
+          </div>
+          <div class="text-right">
+            <div class="text-[10px] text-emerald-200 font-semibold mb-1">มูลค่ารวม</div>
+            <h3 class="text-xl font-bold"><span id="m-sale-stock-value">฿0</span></h3>
+          </div>
+        </div>
+        <p class="text-[10px] text-emerald-200 mt-3 flex items-center gap-1.5 font-semibold">
+          <span class="w-2 h-2 bg-emerald-300 rounded-full inline-block animate-pulse"></span>
+          ข้อมูลล่าสุดอัปเดตเรียลไทม์
+        </p>
+      </div>
+
+      <!-- In-Hand Products List -->
+      <div class="space-y-3">
+        <h3
+          class="font-bold text-slate-800 text-xs px-1 uppercase tracking-wider"
+        >
+          รายการสินค้าในสต็อกของคุณ
+        </h3>
+        <div class="space-y-2.5" id="m-inhand-list">
+          <div
+            class="text-center py-8 text-slate-400 text-xs bg-white border border-slate-200 rounded-2xl"
+          >
+            กำลังโหลดสต็อกคงเหลือ...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 1.5: PHARMACY STOCK -->
+    <div id="msec-pharmstock" class="hidden space-y-4 fade-in">
+      <div
+        class="bg-gradient-to-tr from-blue-600 to-blue-700 rounded-3xl p-5 text-white shadow-lg shadow-blue-600/20"
+      >
+        <span class="text-xs font-bold text-blue-100 uppercase tracking-wider"
+          >สต็อกสินค้าร้านยาฝากขาย</span
+        >
+        <div class="flex items-end justify-between mt-2">
+          <div>
+            <div class="text-[10px] text-blue-200 font-semibold mb-1">จำนวนทั้งหมด</div>
+            <h3 class="text-3xl font-black"><span id="m-pharm-stock-count">0</span><span class="text-sm font-normal ml-1 text-blue-200">ชิ้น</span></h3>
+          </div>
+          <div class="text-right">
+            <div class="text-[10px] text-blue-200 font-semibold mb-1">มูลค่ารวม</div>
+            <h3 class="text-xl font-bold"><span id="m-pharm-stock-value">฿0</span></h3>
+          </div>
+        </div>
+        <p class="text-[10px] text-blue-200 mt-3 flex items-center gap-1.5 font-semibold">
+          <span class="w-2 h-2 bg-blue-300 rounded-full inline-block animate-pulse"></span>
+          ข้อมูลล่าสุดอัปเดตเรียลไทม์
+        </p>
+      </div>
+
+      <!-- Pharmacy Consigned Stocks Accordion -->
+      <div class="space-y-3">
+        <h3
+          class="font-bold text-slate-800 text-xs px-1 uppercase tracking-wider"
+        >
+          สินค้าฝากขายในร้านยาที่ดูแล
+        </h3>
+        <div id="m-pharmacy-consign-list" class="space-y-2.5">
+          <!-- Rendered store list with accordion dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 2: ACTIONS -->
+    <div id="msec-actions" class="hidden space-y-4 fade-in">
+      <h3
+        class="font-bold text-slate-800 text-sm mb-2 px-1 uppercase tracking-wider text-center"
+      >
+        เลือกทำรายการระบบ
+      </h3>
+
+      <div class="grid grid-cols-2 gap-4">
+        <!-- Action 1: Restock -->
+        <button
+          onclick="openForm('Restock')"
+          class="bg-white hover:bg-slate-50 border border-slate-200 active:scale-[0.97] transition-all p-5 rounded-3xl shadow-sm flex flex-col items-center justify-center text-center gap-3"
+        >
+          <div
+            class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center border border-emerald-100"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+          </div>
+          <span class="font-bold text-xs text-slate-700">รายการเบิกของ</span>
+        </button>
+
+        <!-- Action 2: Consign -->
+        <button
+          onclick="openForm('Consign')"
+          class="bg-white hover:bg-slate-50 border border-slate-200 active:scale-[0.97] transition-all p-5 rounded-3xl shadow-sm flex flex-col items-center justify-center text-center gap-3"
+        >
+          <div
+            class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center border border-emerald-100"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+              />
+            </svg>
+          </div>
+          <span class="font-bold text-xs text-slate-700">รายการฝากขาย</span>
+        </button>
+
+        <!-- Action 3: Sale -->
+        <button
+          onclick="openForm('Sale')"
+          class="bg-white hover:bg-slate-50 border border-slate-200 active:scale-[0.97] transition-all p-5 rounded-3xl shadow-sm flex flex-col items-center justify-center text-center gap-3"
+        >
+          <div
+            class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center border border-emerald-100"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+          <span class="font-bold text-xs text-slate-700"
+            >รายการขายได้</span
+          >
+        </button>
+
+        <!-- Action 4: Return -->
+        <button
+          onclick="openForm('Return')"
+          class="bg-white hover:bg-slate-50 border border-slate-200 active:scale-[0.97] transition-all p-5 rounded-3xl shadow-sm flex flex-col items-center justify-center text-center gap-3"
+        >
+          <div
+            class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center border border-emerald-100"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+              />
+            </svg>
+          </div>
+          <span class="font-bold text-xs text-slate-700"
+            >รายการคืนสินค้า</span
+          >
+        </button>
+      </div>
+    </div>
+
+    <!-- SECTION 3: HISTORY -->
+    <div id="msec-history" class="hidden space-y-3 fade-in">
+      <h3
+        class="font-bold text-slate-800 text-xs px-1 uppercase tracking-wider"
+      >
+        ประวัติการทำรายการของคุณ
+      </h3>
+      <div id="m-history-list" class="space-y-3">
+        <div class="text-center py-8 text-slate-400 text-xs">
+          กำลังโหลดประวัติ...
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Mobile Bottom Nav Bar (Redesigned to Emerald Active Color) -->
+  <nav
+    class="fixed bottom-0 left-0 right-0 h-18 bg-white border-t border-slate-200 flex items-center justify-around pb-2 px-2 shadow-2xl shrink-0 z-40"
+  >
+    <button
+      onclick="switchMobileTab('salestock')"
+      id="m-nav-salestock"
+      class="flex-1 flex flex-col items-center justify-center py-2 text-emerald-600 font-bold transition-all"
+    >
+      <svg
+        class="w-5 h-5 mb-0.5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+        />
+      </svg>
+      <span class="text-[10px]">คลังเซลล์</span>
+    </button>
+
+    <button
+      onclick="switchMobileTab('pharmstock')"
+      id="m-nav-pharmstock"
+      class="flex-1 flex flex-col items-center justify-center py-2 text-slate-450 hover:text-emerald-600 transition-all"
+    >
+      <svg
+        class="w-5 h-5 mb-0.5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+        />
+      </svg>
+      <span class="text-[10px]">คลังร้านยา</span>
+    </button>
+
+    <button
+      onclick="switchMobileTab('actions')"
+      id="m-nav-actions"
+      class="flex-1 flex flex-col items-center justify-center py-2 text-slate-450 hover:text-emerald-600 transition-all"
+    >
+      <svg
+        class="w-5 h-5 mb-0.5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+      <span class="text-[10px]">ทำรายการ</span>
+    </button>
+
+    <button
+      onclick="switchMobileTab('history')"
+      id="m-nav-history"
+      class="flex-1 flex flex-col items-center justify-center py-2 text-slate-450 hover:text-emerald-600 transition-all"
+    >
+      <svg
+        class="w-5 h-5 mb-0.5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+        />
+      </svg>
+      <span class="text-[10px]">ประวัติ</span>
+    </button>
+  </nav>
+</div>
+
+<!-- ============================================== -->
+<!-- TRANSACTION SUBMISSION OVERLAY DIALOG -->
+<!-- ============================================== -->
+<div
+  id="m-form-overlay"
+  class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex flex-col justify-end"
+>
+  <div
+    class="bg-white rounded-t-[32px] max-h-[92vh] flex flex-col overflow-hidden shadow-2xl"
+  >
+    <!-- Overlay Header -->
+    <div
+      class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0"
+    >
+      <div>
+        <h3 id="m-form-title" class="font-bold text-slate-800 text-sm">
+          ทำรายการใหม่
+        </h3>
+        <span
+          id="m-form-subtitle"
+          class="text-[10px] text-emerald-600 font-bold uppercase tracking-wider"
+          >Restock Form</span
+        >
+      </div>
+      <button
+        onclick="closeForm()"
+        class="w-8 h-8 bg-slate-200 text-slate-650 hover:bg-slate-300 rounded-full flex items-center justify-center active:scale-90 transition-all"
+      >
+        <svg
+          class="w-5 h-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M6 18L18 6M6 6l12 12"
+          />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Form content -->
+    <div class="p-5 overflow-y-auto flex-1 space-y-5 text-xs text-slate-700">
+      <!-- Subtype Select (only visible for Returns) -->
+      <div id="mform-return-subtype-sec" class="hidden">
+        <label class="block font-bold text-slate-700 mb-1.5"
+          >ระบุประเภทการคืนสินค้า</label
+        >
+        <select
+          id="mform-return-subtype"
+          onchange="toggleFormInputs()"
+          class="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-xs"
+        >
+          <option value="Pharmacy_to_Sale">
+            รับคืนสินค้าจากหน้าร้านกลับเข้าสต็อก
+          </option>
+          <option value="Sale_to_Company">
+            คืนสินค้ากลับบริษัท
+          </option>
+        </select>
+      </div>
+
+      <!-- Store Select (for Consign, Sale, Pharmacy_to_Sale Returns) -->
+      <div id="mform-store-sec" class="hidden">
+        <label class="block font-bold text-slate-700 mb-1.5"
+          >เลือกร้านยาปลายทาง</label
+        >
+        <select
+          id="mform-store"
+          onchange="loadProductStockLimits()"
+          class="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-xs"
+        >
+          <!-- Populated from assigned stores -->
+        </select>
+      </div>
+
+      <!-- Add Products Grid / Cart -->
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="block font-bold text-slate-700">รายการสินค้า</label>
+          <button
+            type="button"
+            onclick="addCartItemRow()"
+            class="text-xs font-bold text-emerald-600 flex items-center gap-1"
+          >
+            + เพิ่มสินค้า
+          </button>
+        </div>
+        <div id="mform-cart" class="space-y-3">
+          <!-- Rows will be added dynamically -->
+        </div>
+      </div>
+
+      <!-- Remark / Note -->
+      <div id="mform-remark-sec">
+        <label class="block font-bold text-slate-700 mb-1.5"
+          >หมายเหตุ (ถ้ามี)</label
+        >
+        <textarea
+          id="mform-remark"
+          rows="2"
+          class="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-xs resize-none"
+          placeholder="ระบุรายละเอียดเพิ่มเติม..."
+        ></textarea>
+      </div>
+
+      <!-- Evidence Slip (Required for Sales, optional/hidden for others) -->
+      <div id="mform-slip-sec" class="hidden">
+        <label class="block font-bold text-slate-700 mb-1"
+          >ภาพหลักฐาน/สลิปโอนเงิน</label
+        >
+        <p class="text-[10px] text-slate-400 mb-2 font-medium">
+          ถ่ายรูปสลิปหรือหลักฐานแนบส่งเพื่อรอการตรวจสอบ
+        </p>
+        <div class="flex items-center gap-3">
+          <label
+            class="flex-1 flex flex-col items-center justify-center bg-slate-50 border-2 border-dashed border-slate-350 rounded-2xl py-6 cursor-pointer hover:bg-slate-100 transition-all"
+          >
+            <svg
+              class="w-8 h-8 text-slate-400 mb-1.5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            <span
+              class="text-[10px] text-slate-500 font-bold"
+              id="mform-slip-label"
+              >กดเพื่อเปิดกล้อง / แนบรูปภาพ</span
+            >
+            <input
+              type="file"
+              id="mform-slip-input"
+              accept="image/*"
+              capture="environment"
+              onchange="previewSlip(this)"
+              class="hidden"
+            />
+          </label>
+          <div
+            class="w-20 h-20 bg-slate-100 border border-slate-200 rounded-2xl hidden overflow-hidden flex items-center justify-center"
+            id="mform-slip-preview-container"
+          >
+            <img
+              src=""
+              id="mform-slip-preview"
+              class="object-cover w-full h-full"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions footer -->
+    <div
+      class="p-5 border-t border-slate-100 bg-slate-50 flex items-center gap-3 shrink-0"
+    >
+      <button
+        onclick="closeForm()"
+        class="flex-1 py-3 border border-slate-300 rounded-xl font-bold hover:bg-slate-100 transition-all text-center text-xs text-slate-700"
+      >
+        ยกเลิก
+      </button>
+      <button
+        onclick="submitMobileForm()"
+        id="mform-submit-btn"
+        class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 active:scale-95 transition-all text-center text-xs"
+      >
+        ส่งคำขอ
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Success Modal -->
+<div
+  id="m-success-modal"
+  class="hidden fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+>
+  <div
+    class="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden scale-100 transition-transform"
+  >
+    <div class="p-6 text-center">
+      <div
+        class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4"
+      >
+        <svg
+          class="w-8 h-8 text-emerald-500"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="3"
+            d="M5 13l4 4L19 7"
+          />
+        </svg>
+      </div>
+      <h3 class="text-lg font-bold text-slate-800 mb-2">ส่งรายการสำเร็จ!</h3>
+      <p class="text-sm text-slate-500 mb-4">
+        เลขที่เอกสาร:
+        <span id="m-success-docno" class="font-bold text-slate-700"></span>
+      </p>
+      <div
+        class="inline-block bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1 rounded-full text-xs font-bold mb-6"
+      >
+        สถานะ: รออนุมัติ
+      </div>
+      <button
+        onclick="
+          document.getElementById('m-success-modal').classList.add('hidden');
+          switchMobileTab('dashboard');
+        "
+        class="w-full py-3 bg-white border border-emerald-200 text-emerald-700 font-bold rounded-xl hover:bg-emerald-50 transition-colors text-sm"
+      >
+        กลับสู่หน้าหลัก
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Transaction Detail Modal -->
+<div id="m-txndetail-modal" class="hidden fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 transition-all">
+  <div class="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in">
+    <!-- Header -->
+    <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50 relative">
+      <div class="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-slate-200 rounded-full sm:hidden"></div>
+      <div>
+        <h3 class="text-sm font-black text-slate-800" id="m-txndetail-docno">TXN-00000000-0000</h3>
+        <p class="text-[10px] text-slate-500 font-bold" id="m-txndetail-date">01-01-2026 12:00:00</p>
+      </div>
+      <button onclick="closeMobileTxnModal()" class="w-8 h-8 flex items-center justify-center bg-white border border-slate-200 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+      </button>
+    </div>
+    
+    <!-- Body -->
+    <div class="p-5 overflow-y-auto flex-1 space-y-4">
+      <div class="flex items-center justify-between">
+        <span class="px-2 py-1 rounded text-[10px] font-bold" id="m-txndetail-type">Type</span>
+        <span class="px-2 py-1 rounded text-[10px] font-bold" id="m-txndetail-status">Status</span>
+      </div>
+      
+      <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+        <p class="text-[10px] font-bold text-slate-400 mb-1">เป้าหมาย / สาขา</p>
+        <p class="text-xs font-bold text-slate-800" id="m-txndetail-dest">Branch Name</p>
+      </div>
+      
+      <div>
+        <p class="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-wider">รายการสินค้า</p>
+        <div id="m-txndetail-items" class="space-y-2">
+          <!-- Items injected here -->
+        </div>
+      </div>
+      
+      <div class="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-600">มูลค่ารวม</span>
+        <span class="text-base font-black text-emerald-600" id="m-txndetail-total">฿0</span>
+      </div>
+      
+      <div id="m-txndetail-remark-container" class="hidden">
+        <p class="text-[10px] font-bold text-slate-400 mb-1">หมายเหตุ</p>
+        <p class="text-[11px] text-slate-600 bg-amber-50 p-3 rounded-xl border border-amber-100" id="m-txndetail-remark">-</p>
+      </div>
+      
+      <div id="m-txndetail-approval-container" class="hidden">
+        <p class="text-[10px] font-bold text-slate-400 mb-1">ข้อมูลการอนุมัติ</p>
+        <div class="text-[10px] text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
+          <p>ผู้อนุมัติ: <span class="font-bold text-slate-800" id="m-txndetail-approver">-</span></p>
+          <p>เวลา: <span class="font-bold text-slate-800" id="m-txndetail-approvetime">-</span></p>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+</div>
