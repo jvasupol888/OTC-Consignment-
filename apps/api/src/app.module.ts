@@ -6,6 +6,7 @@ import { UsersModule } from './users/users.module.js';
 import { ProductsModule } from './products/products.module.js';
 import { StoresModule } from './stores/stores.module.js';
 import { InventoryModule } from './inventory/inventory.module.js';
+import { FilesModule } from './files/files.module.js';
 import { TransactionsModule } from './transactions/transactions.module.js';
 import { HealthController } from './health.controller.js';
 
@@ -18,6 +19,7 @@ import { HealthController } from './health.controller.js';
     ProductsModule,
     StoresModule,
     InventoryModule,
+    FilesModule,
     TransactionsModule,
   ],
   controllers: [HealthController],

@@ -5,13 +5,18 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, sql, desc, inArray } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import {
   transactionDocs,
   transactionLines,
   stockMovements,
+  users,
+  stores,
+  products,
   type Database,
 } from '@otc/db';
+import type { TxnStatus } from '@otc/shared';
 import {
   computeApprovalDeltas,
   computeRollbackDeltas,
@@ -21,6 +26,7 @@ import {
 } from '@otc/shared';
 import { DATABASE } from '../db/db.module.js';
 import { InventoryService } from '../inventory/inventory.service.js';
+import { FilesService } from '../files/files.service.js';
 import type { AuthUser } from '../auth/decorators.js';
 
 @Injectable()
@@ -28,12 +34,18 @@ export class TransactionsService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     private readonly inventory: InventoryService,
+    private readonly files: FilesService,
   ) {}
 
   // ---------------------------------------------------------------
   // SUBMIT — เซลล์ส่งรายการ → สถานะ PENDING (ยังไม่แตะสต็อก)
   // ---------------------------------------------------------------
   async submit(user: AuthUser, input: SubmitTransactionInput) {
+    // ตรวจว่าไฟล์สลิปถูกอัปโหลดขึ้น S3 จริง (กัน key ปลอม)
+    if (input.evidenceKey && !(await this.files.exists(input.evidenceKey))) {
+      throw new BadRequestException('ไม่พบไฟล์หลักฐานที่อัปโหลด (evidenceKey ไม่ถูกต้อง)');
+    }
+
     return this.db.transaction(async (tx) => {
       const docNo = await this.nextDocNo(tx);
       const [doc] = await tx
@@ -127,6 +139,79 @@ export class TransactionsService {
 
       return { docNo, status: 'CANCELLED' as const, rolledBack: doc.status === 'APPROVED' };
     });
+  }
+
+  // ---------------------------------------------------------------
+  // LIST — หน้าอนุมัติ (admin) / รายการของฉัน (sale)
+  // ---------------------------------------------------------------
+  async list(filter: { status?: TxnStatus; createdBy?: string; limit?: number }) {
+    const creator = alias(users, 'creator');
+    const approver = alias(users, 'approver');
+
+    const conds = [];
+    if (filter.status) conds.push(eq(transactionDocs.status, filter.status));
+    if (filter.createdBy) conds.push(eq(transactionDocs.createdBy, filter.createdBy));
+
+    const docs = await this.db
+      .select({
+        id: transactionDocs.id,
+        docNo: transactionDocs.docNo,
+        docType: transactionDocs.docType,
+        returnSubtype: transactionDocs.returnSubtype,
+        status: transactionDocs.status,
+        evidenceKey: transactionDocs.evidenceKey,
+        remark: transactionDocs.remark,
+        createdAt: transactionDocs.createdAt,
+        approvedAt: transactionDocs.approvedAt,
+        createdById: creator.id,
+        createdByName: creator.fullName,
+        approvedByName: approver.fullName,
+        storeId: stores.id,
+        storeCode: stores.code,
+        storeName: stores.name,
+      })
+      .from(transactionDocs)
+      .leftJoin(creator, eq(transactionDocs.createdBy, creator.id))
+      .leftJoin(approver, eq(transactionDocs.approvedBy, approver.id))
+      .leftJoin(stores, eq(transactionDocs.storeId, stores.id))
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(transactionDocs.createdAt))
+      .limit(filter.limit ?? 200);
+
+    if (!docs.length) return [];
+
+    // ดึง line ทั้งหมดของ doc เหล่านี้ + ชื่อสินค้า
+    const ids = docs.map((d) => d.id);
+    const lines = await this.db
+      .select({
+        docId: transactionLines.docId,
+        productId: products.id,
+        productCode: products.code,
+        productName: products.name,
+        quantity: transactionLines.quantity,
+      })
+      .from(transactionLines)
+      .innerJoin(products, eq(transactionLines.productId, products.id))
+      .where(inArray(transactionLines.docId, ids));
+
+    const linesByDoc = new Map<string, typeof lines>();
+    for (const l of lines) {
+      const arr = linesByDoc.get(l.docId) ?? [];
+      arr.push(l);
+      linesByDoc.set(l.docId, arr);
+    }
+
+    return docs.map(({ id, createdById, ...d }) => ({
+      ...d,
+      createdBy: { id: createdById, name: d.createdByName },
+      store: d.storeId ? { id: d.storeId, code: d.storeCode, name: d.storeName } : null,
+      lines: (linesByDoc.get(id) ?? []).map((l) => ({
+        productId: l.productId,
+        productCode: l.productCode,
+        productName: l.productName,
+        quantity: l.quantity,
+      })),
+    }));
   }
 
   // ================= helpers =================

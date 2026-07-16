@@ -1,9 +1,11 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import {
   submitTransactionSchema,
   rejectTransactionSchema,
+  TXN_STATUSES,
   type SubmitTransactionInput,
   type RejectTransactionInput,
+  type TxnStatus,
 } from '@otc/shared';
 import { TransactionsService } from './transactions.service.js';
 import { JwtAuthGuard, RolesGuard } from '../auth/guards.js';
@@ -14,6 +16,22 @@ import { ZodBody } from '../common/zod.pipe.js';
 @Controller('transactions')
 export class TransactionsController {
   constructor(private readonly txns: TransactionsService) {}
+
+  // หน้าอนุมัติ (admin): list ทุกคน + กรอง ?status=PENDING
+  @Roles('ADMIN', 'SYSTEM_ADMIN')
+  @Get()
+  listForAdmin(@Query('status') status?: string) {
+    const s = TXN_STATUSES.includes(status as TxnStatus) ? (status as TxnStatus) : undefined;
+    return this.txns.list({ status: s });
+  }
+
+  // รายการของฉัน (sale): เห็นเฉพาะที่ตัวเองสร้าง
+  @Roles('SALE')
+  @Get('mine')
+  listMine(@CurrentUser() user: AuthUser, @Query('status') status?: string) {
+    const s = TXN_STATUSES.includes(status as TxnStatus) ? (status as TxnStatus) : undefined;
+    return this.txns.list({ status: s, createdBy: user.sub });
+  }
 
   // เซลล์ส่งรายการ
   @Roles('SALE')
