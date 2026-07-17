@@ -144,13 +144,14 @@ export class TransactionsService {
   // ---------------------------------------------------------------
   // LIST — หน้าอนุมัติ (admin) / รายการของฉัน (sale)
   // ---------------------------------------------------------------
-  async list(filter: { status?: TxnStatus; createdBy?: string; limit?: number }) {
+  async list(filter: { status?: TxnStatus; createdBy?: string; docNo?: string; limit?: number }) {
     const creator = alias(users, 'creator');
     const approver = alias(users, 'approver');
 
     const conds = [];
     if (filter.status) conds.push(eq(transactionDocs.status, filter.status));
     if (filter.createdBy) conds.push(eq(transactionDocs.createdBy, filter.createdBy));
+    if (filter.docNo) conds.push(eq(transactionDocs.docNo, filter.docNo));
 
     const docs = await this.db
       .select({
