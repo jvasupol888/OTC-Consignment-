@@ -1,11 +1,11 @@
-import type { ReactNode } from 'react';
+import React from 'react';
 
 export const metadata = {
   title: 'OTC Consignment — Admin',
   description: 'ระบบฝากขาย OTC (Admin Panel)',
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: { children: any }) {
   return (
     <html lang="th">
       <head>

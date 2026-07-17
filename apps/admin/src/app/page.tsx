@@ -9,6 +9,7 @@ import {
   inventoryApi,
   transactionsApi,
   dashboardApi,
+  BASE,
 } from '../lib/api';
 
 export default function AdminPage() {
