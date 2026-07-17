@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import './globals.css';
+import { Providers } from '../lib/providers';
 
 export const metadata = {
   title: 'OTC Consignment — Admin',
@@ -8,7 +10,9 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="th">
-      <body style={{ fontFamily: 'system-ui, sans-serif', margin: 0 }}>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

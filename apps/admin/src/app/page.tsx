@@ -1,14 +1,14 @@
-export default function HomePage() {
-  return (
-    <main style={{ padding: 32, maxWidth: 720, margin: '0 auto' }}>
-      <h1>ระบบฝากขาย OTC — Admin Panel</h1>
-      <p>โครง Next.js พร้อมแล้ว เชื่อมต่อ API ที่ <code>{process.env.NEXT_PUBLIC_API_URL}</code></p>
-      <ul>
-        <li>TODO: หน้า Login (ใช้ <code>authApi.login</code> ใน <code>src/lib/api.ts</code>)</li>
-        <li>TODO: Dashboard (pending / สต็อกรวม / เซลล์)</li>
-        <li>TODO: หน้าอนุมัติรายการ (approve / reject / cancel)</li>
-        <li>TODO: Master Data (users / products / stores) + import xlsx</li>
-      </ul>
-    </main>
-  );
+'use client';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../lib/auth';
+
+export default function Home() {
+  const { user, ready } = useAuth();
+  const router = useRouter();
+  useEffect(() => {
+    if (!ready) return;
+    router.replace(user ? '/dashboard' : '/login');
+  }, [ready, user, router]);
+  return <div style={{ padding: 40 }} className="muted">กำลังโหลด…</div>;
 }
