@@ -108,7 +108,13 @@ export default function App() {
       setStores(await storesRes.json());
       setInventoryList(await invRes.json());
     } catch (err: any) {
-      Alert.alert('เกิดข้อผิดพลาด', `โหลดข้อมูลล้มเหลว: ${err.message}`);
+      if (err.message && (err.message.includes('401') || err.message.includes('Unauthorized'))) {
+        setToken(null);
+        setUser(null);
+        Alert.alert('เซสชันหมดอายุ', 'กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
+      } else {
+        Alert.alert('เกิดข้อผิดพลาด', `โหลดข้อมูลล้มเหลว: ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }

@@ -112,6 +112,12 @@ export default function AdminPage() {
         }
       } catch (err: any) {
         console.error('Error fetching data:', err);
+        if (err.message && (err.message.includes('401') || err.message.includes('Unauthorized'))) {
+          localStorage.removeItem('otc_token');
+          localStorage.removeItem('otc_user');
+          setToken(null);
+          setUser(null);
+        }
       }
     };
 
