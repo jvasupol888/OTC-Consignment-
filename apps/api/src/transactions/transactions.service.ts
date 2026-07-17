@@ -5,11 +5,14 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, sql, desc } from 'drizzle-orm';
 import {
   transactionDocs,
   transactionLines,
   stockMovements,
+  users,
+  stores,
+  products,
   type Database,
 } from '@otc/db';
 import {
@@ -29,6 +32,82 @@ export class TransactionsService {
     @Inject(DATABASE) private readonly db: Database,
     private readonly inventory: InventoryService,
   ) {}
+
+  // ---------------------------------------------------------------
+  // QUERY — ดึงรายการธุรกรรม
+  // ---------------------------------------------------------------
+  async findAll(filter?: { createdBy?: string; status?: string }) {
+    const conds = [];
+    if (filter?.createdBy) conds.push(eq(transactionDocs.createdBy, filter.createdBy));
+    if (filter?.status) conds.push(eq(transactionDocs.status, filter.status as any));
+
+    return this.db
+      .select({
+        id: transactionDocs.id,
+        docNo: transactionDocs.docNo,
+        docType: transactionDocs.docType,
+        returnSubtype: transactionDocs.returnSubtype,
+        createdBy: transactionDocs.createdBy,
+        creatorName: users.fullName,
+        storeId: transactionDocs.storeId,
+        storeName: stores.name,
+        status: transactionDocs.status,
+        evidenceKey: transactionDocs.evidenceKey,
+        remark: transactionDocs.remark,
+        createdAt: transactionDocs.createdAt,
+      })
+      .from(transactionDocs)
+      .leftJoin(users, eq(transactionDocs.createdBy, users.id))
+      .leftJoin(stores, eq(transactionDocs.storeId, stores.id))
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(transactionDocs.createdAt));
+  }
+
+  async findPending() {
+    return this.findAll({ status: 'PENDING' });
+  }
+
+  async findByDocNo(docNo: string) {
+    const docRows = await this.db
+      .select({
+        id: transactionDocs.id,
+        docNo: transactionDocs.docNo,
+        docType: transactionDocs.docType,
+        returnSubtype: transactionDocs.returnSubtype,
+        createdBy: transactionDocs.createdBy,
+        creatorName: users.fullName,
+        storeId: transactionDocs.storeId,
+        storeName: stores.name,
+        status: transactionDocs.status,
+        evidenceKey: transactionDocs.evidenceKey,
+        remark: transactionDocs.remark,
+        approvedBy: transactionDocs.approvedBy,
+        approvedAt: transactionDocs.approvedAt,
+        createdAt: transactionDocs.createdAt,
+      })
+      .from(transactionDocs)
+      .leftJoin(users, eq(transactionDocs.createdBy, users.id))
+      .leftJoin(stores, eq(transactionDocs.storeId, stores.id))
+      .where(eq(transactionDocs.docNo, docNo));
+
+    const head = docRows[0];
+    if (!head) throw new NotFoundException(`ไม่พบเอกสาร ${docNo}`);
+
+    const lines = await this.db
+      .select({
+        id: transactionLines.id,
+        productId: transactionLines.productId,
+        productName: products.name,
+        productSku: products.sku,
+        productPrice: products.price,
+        quantity: transactionLines.quantity,
+      })
+      .from(transactionLines)
+      .leftJoin(products, eq(transactionLines.productId, products.id))
+      .where(eq(transactionLines.docId, head.id));
+
+    return { ...head, lines };
+  }
 
   // ---------------------------------------------------------------
   // SUBMIT — เซลล์ส่งรายการ → สถานะ PENDING (ยังไม่แตะสต็อก)
@@ -225,3 +304,4 @@ export class TransactionsService {
     return `${prefix}-${String((count ?? 0) + 1).padStart(4, '0')}`;
   }
 }
+

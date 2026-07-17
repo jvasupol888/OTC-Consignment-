@@ -1,4 +1,13 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Param,
+  Post,
+  Get,
+  Query,
+  UseGuards,
+  ForbiddenException,
+} from '@nestjs/common';
 import {
   submitTransactionSchema,
   rejectTransactionSchema,
@@ -14,6 +23,39 @@ import { ZodBody } from '../common/zod.pipe.js';
 @Controller('transactions')
 export class TransactionsController {
   constructor(private readonly txns: TransactionsService) {}
+
+  // ดึงรายการทั้งหมด
+  @Get()
+  findAll(
+    @CurrentUser() user: AuthUser,
+    @Query('createdBy') createdBy?: string,
+    @Query('status') status?: string,
+  ) {
+    if (user.role === 'SALE') {
+      // เซลล์ดูได้เฉพาะรายการของตัวเอง
+      return this.txns.findAll({ createdBy: user.sub, status });
+    }
+    // แอดมินดูได้หมด
+    return this.txns.findAll({ createdBy, status });
+  }
+
+  // ดึงรายการที่รออนุมัติ (สำหรับแอดมิน)
+  @Roles('ADMIN', 'SYSTEM_ADMIN')
+  @Get('pending')
+  findPending() {
+    return this.txns.findPending();
+  }
+
+  // ดึงรายละเอียดรายใบ
+  @Get(':docNo')
+  async findOne(@Param('docNo') docNo: string, @CurrentUser() user: AuthUser) {
+    const txn = await this.txns.findByDocNo(docNo);
+    // เช็คสิทธิ์เซลล์ห้ามดูของคนอื่น
+    if (user.role === 'SALE' && txn.createdBy !== user.sub) {
+      throw new ForbiddenException('คุณไม่มีสิทธิ์ดูรายละเอียดรายการนี้');
+    }
+    return txn;
+  }
 
   // เซลล์ส่งรายการ
   @Roles('SALE')
