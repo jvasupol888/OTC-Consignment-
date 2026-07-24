@@ -293,6 +293,10 @@ export default function AdminPage() {
           const s = await storesApi.list(token);
           setStores(s);
         }
+        if (inventoryList.length === 0) {
+          const inv = await inventoryApi.list(token);
+          setInventoryList(inv);
+        }
       } else if (activeTab === 'inventory') {
         const data = await inventoryApi.list(token);
         setInventoryList(data);
@@ -1212,8 +1216,8 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {recentTxns.length > 0 ? (
-                        recentTxns.map((t: any, index: number) => (
+                      {recentTxns.filter((t: any) => t.docType === 'SALE').length > 0 ? (
+                        recentTxns.filter((t: any) => t.docType === 'SALE').map((t: any, index: number) => (
                           <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors text-[20px] text-slate-700">
                             <td className="py-3 px-4 text-center text-slate-500">{index + 1}</td>
                             <td className="py-3 px-4 font-medium text-slate-900 whitespace-nowrap">{t.docNo}</td>
@@ -1224,7 +1228,7 @@ export default function AdminPage() {
                               {Number(t.totalValue || 0) > 0 ? `฿${Number(t.totalValue).toLocaleString()}` : '-'}
                             </td>
                             <td className="py-3 px-4 text-center">
-                              <button className="text-emerald-600 hover:text-emerald-700 hover:underline font-medium">รายละเอียด</button>
+                              <button onClick={() => handleViewTxnDetails(t.docNo)} className="text-emerald-600 hover:text-emerald-700 hover:underline font-medium">รายละเอียด</button>
                             </td>
                           </tr>
                         ))
@@ -1304,6 +1308,7 @@ export default function AdminPage() {
                         <th className="py-4 px-4 text-center">ปลายทาง (เซลล์/ร้านยา)</th>
                         <th className="py-4 px-4 text-center whitespace-nowrap">วันที่ทำรายการ</th>
                         <th className="py-4 px-4 text-center">สถานะ</th>
+                        <th className="py-4 px-4 text-left whitespace-nowrap">แก้ไขล่าสุด (โดย)</th>
                         <th className="py-4 px-4 text-center">จัดการ</th>
                       </tr>
                     </thead>
@@ -1339,6 +1344,14 @@ export default function AdminPage() {
                                 t.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
                                 t.status === 'REJECTED' ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
                               }`}>{t.status}</span>
+                            </td>
+                            <td className="py-3 px-4 text-left text-[18px]">
+                              {t.approvedByFullName ? (
+                                <div className="flex flex-col">
+                                  <div className="text-[19px] font-semibold text-slate-700">{t.approvedByFullName}</div>
+                                  <div className="text-[18px] text-slate-400 mt-0.5">{formatDate(t.approvedAt)}</div>
+                                </div>
+                              ) : <span className="text-[19px] text-slate-400">-</span>}
                             </td>
                             <td className="py-3 px-4 text-center">
                               <button
@@ -1432,9 +1445,9 @@ export default function AdminPage() {
                             {invSubTab === 'sale' ? 'กรุณาเลือกพนักงานขายเพื่อดูสต็อก' : 'กรุณาเลือกร้านยาเพื่อดูสต็อกฝากขาย'}
                           </td>
                         </tr>
-                      ) : inventoryList.filter((inv) => inv.locationType === (invSubTab === 'sale' ? 'SALE' : 'PHARMACY') && (invSubTab === 'sale' ? inv.saleUserId === selectedInventoryOwner && inv.quantity > 0 : inv.storeId === selectedInventoryOwner)).length > 0 ? (
+                      ) : inventoryList.filter((inv) => inv.locationType === (invSubTab === 'sale' ? 'SALE' : 'PHARMACY') && (invSubTab === 'sale' ? inv.saleUserId === selectedInventoryOwner : inv.storeId === selectedInventoryOwner) && inv.quantity > 0).length > 0 ? (
                         inventoryList
-                          .filter((inv) => inv.locationType === (invSubTab === 'sale' ? 'SALE' : 'PHARMACY') && (invSubTab === 'sale' ? inv.saleUserId === selectedInventoryOwner && inv.quantity > 0 : inv.storeId === selectedInventoryOwner))
+                          .filter((inv) => inv.locationType === (invSubTab === 'sale' ? 'SALE' : 'PHARMACY') && (invSubTab === 'sale' ? inv.saleUserId === selectedInventoryOwner : inv.storeId === selectedInventoryOwner) && inv.quantity > 0)
                           .map((inv: any, index: number) => {
                             const prd = products.find((p) => p.id === inv.productId);
                             let ownerName = '-';
@@ -1448,6 +1461,7 @@ export default function AdminPage() {
 
                             return (
                               <tr key={inv.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors text-[21px] text-slate-700">
+                                <td className="py-3 px-4 text-center">{index + 1}</td>
                                 <td className="py-3 px-4 text-center">{ownerName}</td>
                                 <td className="py-3 px-4 text-center">{prd?.sku || '-'}</td>
                                 <td className="py-3 px-4 text-center">{prd?.name || '-'}</td>
@@ -1459,8 +1473,8 @@ export default function AdminPage() {
                           })
                       ) : (
                         <tr>
-                          <td colSpan={6} className="py-12 text-center text-slate-400 text-[21px]">
-                            ไม่มีข้อมูลสต็อก
+                          <td colSpan={7} className="py-12 text-center text-slate-400 text-[21px]">
+                            ไม่มีสินค้าในสต็อก
                           </td>
                         </tr>
                       )}
@@ -1873,6 +1887,15 @@ export default function AdminPage() {
                     }`}>{selectedTxn.status}</span>
                   </div>
                 </div>
+                {selectedTxn.approvedByFullName && (
+                  <div>
+                    <span className="text-slate-400">อัปเดตสถานะโดย:</span>
+                    <div className="font-bold text-slate-800">
+                      {selectedTxn.approvedByFullName} 
+                      {selectedTxn.approvedAt ? <span className="text-[18px] text-slate-400 font-normal ml-2">({formatDate(selectedTxn.approvedAt)})</span> : ''}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Lines Table */}
@@ -1917,38 +1940,73 @@ export default function AdminPage() {
             </div>
 
             {/* Footer actions */}
-            <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
-              <button
-                onClick={() => setSelectedTxn(null)}
-                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold transition-all text-[21px]"
-              >
-                ปิดหน้าต่าง
-              </button>
-              {selectedTxn.status === 'PENDING' && (
-                <>
+            {(() => {
+              const errors = [];
+              if (selectedTxn.status === 'PENDING' && selectedTxn.docType !== 'REQUEST') {
+                for (const line of selectedTxn.lines || []) {
+                  let availableStock = 0;
+                  if (selectedTxn.docType === 'SALE' || (selectedTxn.docType === 'RETURN' && selectedTxn.returnSubtype === 'PHARMACY_TO_SALE')) {
+                     availableStock = inventoryList.find((i: any) => i.productId === line.productId && i.locationType === 'PHARMACY' && i.storeId === selectedTxn.storeId)?.quantity || 0;
+                  } else {
+                     availableStock = inventoryList.find((i: any) => i.productId === line.productId && i.locationType === 'SALE' && i.saleUserId === selectedTxn.createdBy)?.quantity || 0;
+                  }
+                  if (line.quantity > availableStock) {
+                    errors.push(`"${line.productName || line.productId}" (มี ${availableStock} ขาดอีก ${line.quantity - availableStock})`);
+                  }
+                }
+              }
+              const hasStockError = errors.length > 0;
+
+              return (
+                <div className="p-6 border-t border-slate-100 flex items-start justify-end gap-3 shrink-0 flex-wrap">
+                  {hasStockError && (
+                    <div className="text-red-500 mr-auto text-[19px] space-y-1">
+                      <div className="font-bold">⚠️ ไม่สามารถอนุมัติได้เนื่องจากสต็อกไม่เพียงพอ:</div>
+                      <ul className="list-disc pl-6 text-red-400 font-medium">
+                        {errors.map((err, idx) => (
+                          <li key={idx}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <button
-                    onClick={() => setShowRejectModal(true)}
-                    className="px-4 py-2 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl font-bold transition-all text-[21px]"
+                    onClick={() => setSelectedTxn(null)}
+                    className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold transition-all text-[21px]"
                   >
-                    ปฏิเสธเอกสาร
+                    ปิดหน้าต่าง
                   </button>
-                  <button
-                    onClick={() => handleApproveTxnClick(selectedTxn.docNo)}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/25 transition-all text-[21px]"
-                  >
-                    อนุมัติเอกสาร
-                  </button>
-                </>
-              )}
-              {selectedTxn.status === 'APPROVED' && (
-                <button
-                  onClick={() => setShowCancelModal(true)}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-lg shadow-rose-500/25 transition-all text-[21px]"
-                >
-                  ยกเลิกเอกสาร (คืนสต็อก)
-                </button>
-              )}
-            </div>
+                  {selectedTxn.status === 'PENDING' && (
+                    <>
+                      <button
+                        onClick={() => setShowRejectModal(true)}
+                        className="px-4 py-2 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl font-bold transition-all text-[21px]"
+                      >
+                        ปฏิเสธเอกสาร
+                      </button>
+                      <button
+                        onClick={() => !hasStockError && handleApproveTxnClick(selectedTxn.docNo)}
+                        disabled={hasStockError}
+                        className={`px-4 py-2 rounded-xl font-bold transition-all text-[21px] ${
+                          hasStockError 
+                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/25'
+                        }`}
+                      >
+                        อนุมัติเอกสาร
+                      </button>
+                    </>
+                  )}
+                  {selectedTxn.status === 'APPROVED' && (
+                    <button
+                      onClick={() => setShowCancelModal(true)}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-lg shadow-rose-500/25 transition-all text-[21px]"
+                    >
+                      ยกเลิกเอกสาร (คืนสต็อก)
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

@@ -5,7 +5,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { and, eq, sql, desc } from 'drizzle-orm';
+import { and, eq, sql, desc, aliasedTable } from 'drizzle-orm';
 import {
   transactionDocs,
   transactionLines,
@@ -38,6 +38,7 @@ export class TransactionsService {
   // QUERY — ดึงรายการธุรกรรม
   // ---------------------------------------------------------------
   async findAll(filter?: { createdBy?: string; status?: string }) {
+    const approvers = aliasedTable(users, 'approvers');
     const conds = [];
     if (filter?.createdBy) conds.push(eq(transactionDocs.createdBy, filter.createdBy));
     if (filter?.status) conds.push(eq(transactionDocs.status, filter.status as any));
@@ -56,10 +57,13 @@ export class TransactionsService {
         evidenceKey: transactionDocs.evidenceKey,
         remark: transactionDocs.remark,
         createdAt: transactionDocs.createdAt,
+        approvedAt: transactionDocs.approvedAt,
+        approvedByFullName: approvers.fullName,
       })
       .from(transactionDocs)
       .leftJoin(users, eq(transactionDocs.createdBy, users.id))
       .leftJoin(stores, eq(transactionDocs.storeId, stores.id))
+      .leftJoin(approvers, eq(transactionDocs.approvedBy, approvers.id))
       .where(conds.length ? and(...conds) : undefined)
       .orderBy(desc(transactionDocs.createdAt));
 
@@ -88,6 +92,7 @@ export class TransactionsService {
   }
 
   async findByDocNo(docNo: string) {
+    const approvers = aliasedTable(users, 'approvers');
     const docRows = await this.db
       .select({
         id: transactionDocs.id,
@@ -103,11 +108,13 @@ export class TransactionsService {
         remark: transactionDocs.remark,
         approvedBy: transactionDocs.approvedBy,
         approvedAt: transactionDocs.approvedAt,
+        approvedByFullName: approvers.fullName,
         createdAt: transactionDocs.createdAt,
       })
       .from(transactionDocs)
       .leftJoin(users, eq(transactionDocs.createdBy, users.id))
       .leftJoin(stores, eq(transactionDocs.storeId, stores.id))
+      .leftJoin(approvers, eq(transactionDocs.approvedBy, approvers.id))
       .where(eq(transactionDocs.docNo, docNo));
 
     const head = docRows[0];

@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { and, eq, sql, or, inArray } from 'drizzle-orm';
-import { inventory, stores, type Database } from '@otc/db';
-import type { StockDelta } from '@otc/shared';
+import { inventory, stores, transactionDocs, transactionLines, type Database } from '@otc/db';
+import { computeApprovalDeltas, type StockDelta } from '@otc/shared';
 import { DATABASE } from '../db/db.module.js';
 
 /**
@@ -61,15 +61,65 @@ export class InventoryService {
     }
   }
 
+  private async getReservedQuantities() {
+    const pendingDocs = await this.db
+      .select({
+        id: transactionDocs.id,
+        docType: transactionDocs.docType,
+        returnSubtype: transactionDocs.returnSubtype,
+        createdBy: transactionDocs.createdBy,
+        storeId: transactionDocs.storeId,
+      })
+      .from(transactionDocs)
+      .where(eq(transactionDocs.status, 'PENDING'));
+
+    if (pendingDocs.length === 0) return new Map<string, number>();
+
+    const docIds = pendingDocs.map((d) => d.id);
+    const lines = await this.db
+      .select({
+        docId: transactionLines.docId,
+        productId: transactionLines.productId,
+        quantity: transactionLines.quantity,
+      })
+      .from(transactionLines)
+      .where(inArray(transactionLines.docId, docIds));
+
+    const map = new Map<string, number>();
+
+    for (const doc of pendingDocs) {
+      const docLines = lines.filter((l) => l.docId === doc.id);
+      const deltas = computeApprovalDeltas(doc as any, docLines as any);
+      for (const d of deltas) {
+        if (d.delta < 0) {
+          const key = `${d.locationType}|${d.locationRefId}|${d.productId}`;
+          const current = map.get(key) || 0;
+          map.set(key, current + Math.abs(d.delta));
+        }
+      }
+    }
+
+    return map;
+  }
+
   /** query สต็อกสำหรับแสดงผล (admin เห็นหมด / sale ถูกกรอง) */
   async list(filter: { locationType?: 'SALE' | 'PHARMACY'; saleUserId?: string }) {
     const conds = [];
     if (filter.locationType) conds.push(eq(inventory.locationType, filter.locationType));
     if (filter.saleUserId) conds.push(eq(inventory.saleUserId, filter.saleUserId));
-    return this.db
+    
+    const items = await this.db
       .select()
       .from(inventory)
       .where(conds.length ? and(...conds) : sql`true`);
+      
+    const reservedMap = await this.getReservedQuantities();
+    return items.map(item => {
+      const refId = item.locationType === 'SALE' ? item.saleUserId : item.storeId;
+      const key = `${item.locationType}|${refId}|${item.productId}`;
+      const reservedQuantity = reservedMap.get(key) || 0;
+      return { ...item, reservedQuantity };
+    });
   }
 
   /** ดึงสต็อกทั้งหมดที่เกี่ยวข้องกับเซลล์ (SALE ของตัวเอง + PHARMACY ของร้านที่ดูแล) */
@@ -91,9 +141,17 @@ export class InventoryService {
       );
     }
 
-    return this.db
+    const items = await this.db
       .select()
       .from(inventory)
       .where(or(...orConds));
+      
+    const reservedMap = await this.getReservedQuantities();
+    return items.map(item => {
+      const refId = item.locationType === 'SALE' ? item.saleUserId : item.storeId;
+      const key = `${item.locationType}|${refId}|${item.productId}`;
+      const reservedQuantity = reservedMap.get(key) || 0;
+      return { ...item, reservedQuantity };
+    });
   }
 }

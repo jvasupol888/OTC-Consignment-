@@ -71,7 +71,7 @@ export class ProductsService {
              .orderBy(desc(products.code))
              .limit(1);
            const num = latest[0] ? parseInt(latest[0].code.replace(/^\D+/g, ''), 10) : 0;
-           nextCode = `PRD${String(num + 1 + createdCount).padStart(3, '0')}`;
+           nextCode = `PRD${String(num + 1).padStart(3, '0')}`;
         }
         
         const newRows = await tx.insert(products).values({

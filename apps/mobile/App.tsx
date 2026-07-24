@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
+  ImageBackground,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
@@ -229,7 +230,8 @@ function App() {
       setMobileStats(await statsRes.json());
       const pData = await productsRes.json();
       setProducts(pData.filter((p: any) => p.status === 'ACTIVE'));
-      setStores(await storesRes.json());
+      const allStores = await storesRes.json();
+      setStores(allStores.filter((s: any) => s.assignedUserId === (user?.id || user?.sub)));
       setInventoryList(await invRes.json());
       
       const historyData = await historyRes.json();
@@ -347,6 +349,24 @@ function App() {
     if (docType === 'RETURN' && !returnSubtype) return Alert.alert('คำเตือน', 'กรุณาระบุประเภทการคืนสินค้า');
     if (docType === 'SALE' && !evidenceKey) return Alert.alert('คำเตือน', 'การขายของร้านยาจำเป็นต้องแนบภาพสลิปหลักฐานการเงิน');
 
+    // Validate stock limits before allowing submission
+    if (docType !== 'REQUEST') {
+      for (const line of txnLines) {
+        const prd = products.find((p: any) => p.id === line.productId);
+        let availableStock = 0;
+        let invItem: any;
+        if (docType === 'SALE' || (docType === 'RETURN' && returnSubtype === 'PHARMACY_TO_SALE')) {
+           invItem = inventoryList.find((i: any) => i.productId === line.productId && i.locationType === 'PHARMACY' && i.storeId === selectedStoreId);
+        } else {
+           invItem = inventoryList.find((i: any) => i.productId === line.productId && i.locationType === 'SALE');
+        }
+        availableStock = invItem ? (invItem.quantity - (invItem.reservedQuantity || 0)) : 0;
+        
+        if (line.quantity > availableStock) {
+          return Alert.alert('คำเตือน', `ไม่สามารถทำรายการได้เนื่องจาก ${prd?.name || 'สินค้า'} มีจำนวนในสต็อกไม่เพียงพอ (มี ${availableStock} ชิ้น แต่ระบุ ${line.quantity} ชิ้น)`);
+        }
+      }
+    }
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/transactions`, {
@@ -375,48 +395,56 @@ function App() {
   // --- LOGIN SCREEN ---
   if (!token) {
     return (
-            <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'center', padding: 32, maxWidth: 500, alignSelf: 'center', width: '100%' }}>
-          
-          <View style={{ alignItems: 'center', marginBottom: 48 }}>
-            <Image 
-              source={{ uri: 'https://vulcancoalition.com/wp-content/uploads/2024/11/Nutrition-New.webp' }}
-              style={{ width: 240, height: 100, resizeMode: 'contain', marginBottom: 24 }}
-            />
+      <ImageBackground 
+        source={require('./assets/Background.jpg')} 
+        style={{ flex: 1, width: '100%', height: '100%' }}
+        resizeMode="cover"
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.6)', justifyContent: 'center' }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'center', padding: 24, maxWidth: 500, alignSelf: 'center', width: '100%' }}>
             
-          </View>
-          
-          <View style={{ marginBottom: 32 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 16, paddingHorizontal: 20, paddingVertical: 4, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 20 }}>
-              <Feather name="user" size={24} color={theme.colors.primary} style={{ marginRight: 16 }} />
-              <TextInput
-                style={{ flex: 1, paddingVertical: 14, fontFamily: 'DBHeavent', fontSize: 32, color: theme.colors.text }}
-                placeholder="ชื่อผู้ใช้งาน"
-                placeholderTextColor="#94a3b8"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-              />
-            </View>
-            
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 16, paddingHorizontal: 20, paddingVertical: 4, borderWidth: 1, borderColor: '#e2e8f0' }}>
-              <Feather name="lock" size={24} color={theme.colors.primary} style={{ marginRight: 16 }} />
-              <TextInput
-                style={{ flex: 1, paddingVertical: 14, fontFamily: 'DBHeavent', fontSize: 32, color: theme.colors.text }}
-                placeholder="รหัสผ่าน"
-                placeholderTextColor="#94a3b8"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-              />
-            </View>
-          </View>
+            <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: 32, padding: 32, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 10 }}>
+              <View style={{ alignItems: 'center', marginBottom: 40 }}>
+                <Image 
+                  source={{ uri: 'https://vulcancoalition.com/wp-content/uploads/2024/11/Nutrition-New.webp' }}
+                  style={{ width: 200, height: 80, resizeMode: 'contain', marginBottom: 16 }}
+                />
+              </View>
+              
+              <View style={{ marginBottom: 32 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 16, paddingHorizontal: 20, paddingVertical: 4, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 16 }}>
+                  <Feather name="user" size={24} color={theme.colors.primary} style={{ marginRight: 16 }} />
+                  <TextInput
+                    style={[{ flex: 1, paddingVertical: 14, fontFamily: 'DBHeavent', fontSize: 32, color: theme.colors.text }, Platform.OS === 'web' && { outlineStyle: 'none' }] as any}
+                    placeholder="ชื่อผู้ใช้งาน"
+                    placeholderTextColor="#94a3b8"
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                  />
+                </View>
+                
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 16, paddingHorizontal: 20, paddingVertical: 4, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                  <Feather name="lock" size={24} color={theme.colors.primary} style={{ marginRight: 16 }} />
+                  <TextInput
+                    style={[{ flex: 1, paddingVertical: 14, fontFamily: 'DBHeavent', fontSize: 32, color: theme.colors.text }, Platform.OS === 'web' && { outlineStyle: 'none' }] as any}
+                    placeholder="รหัสผ่าน"
+                    placeholderTextColor="#94a3b8"
+                    secureTextEntry
+                    value={password}
+                    onChangeText={setPassword}
+                  />
+                </View>
+              </View>
 
-          <TouchableOpacity style={{ backgroundColor: theme.colors.primary, paddingVertical: 16, borderRadius: 100, alignItems: 'center', shadowColor: theme.colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8 }} onPress={handleLogin} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'DBHeavent', fontSize: 36, color: '#fff', fontWeight: 'bold' }}>เข้าสู่ระบบ</Text>}
-          </TouchableOpacity>
-        </KeyboardAvoidingView>
-      </View>
+              <TouchableOpacity style={{ backgroundColor: theme.colors.primary, paddingVertical: 12, borderRadius: 100, alignItems: 'center', shadowColor: theme.colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8 }} onPress={handleLogin} disabled={loading}>
+                {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'DBHeavent', fontSize: 30, color: '#fff', fontWeight: 'bold' }}>เข้าสู่ระบบ</Text>}
+              </TouchableOpacity>
+            </View>
+
+          </KeyboardAvoidingView>
+        </View>
+      </ImageBackground>
     );
   }
 
@@ -456,9 +484,9 @@ function App() {
         <View style={styles.headerProfile}>
           <Image 
             source={{ uri: 'https://vulcancoalition.com/wp-content/uploads/2024/11/Nutrition-New.webp' }}
-            style={{ width: 80, height: 32, resizeMode: 'contain' }}
+            style={{ width: 110, height: 44, resizeMode: 'contain' }}
           />
-          <View style={{ marginLeft: 8, borderLeftWidth: 1, borderLeftColor: theme.colors.border, paddingLeft: 8, flex: 1 }}>
+          <View style={{ marginLeft: 10, borderLeftWidth: 1, borderLeftColor: theme.colors.border, paddingLeft: 10, flex: 1 }}>
             <Text style={[styles.headerGreeting, { color: theme.colors.text }]} numberOfLines={1}>{user?.fullName || 'เซลล์'}</Text>
             <Text style={[styles.headerRole, { color: theme.colors.textMuted }]} numberOfLines={1}>Sale Agent</Text>
           </View>
@@ -488,7 +516,7 @@ function App() {
                 </View>
                 <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(255,255,255,0.2)' }]}><Feather name="box" size={24} color="#ffffff" /></View>
               </View>
-              <Text style={[styles.summaryValueDark, { color: '#d1fae5' }]}>รวมมูลค่า <Text style={[styles.highlightText, { color: '#ffffff' }]}>฿{mobileStats.saleStockValue.toLocaleString()}</Text></Text>
+              <Text style={[styles.summaryValueDark, { color: '#d1fae5' }]}>รวมมูลค่า <Text style={[styles.highlightText, { color: '#ffffff' }]}>฿{(Number(mobileStats?.saleStockValue) || 0).toLocaleString()}</Text></Text>
             </View>
             
             <View style={styles.sectionHeader}>
@@ -518,7 +546,7 @@ function App() {
                     <View style={styles.itemInfo}>
                       <Text style={styles.itemName}>{prd.name}</Text>
                       <Text style={styles.itemSku}>SKU : {prd.sku}</Text>
-                      <Text style={styles.itemPrice}>฿{unitPrice.toLocaleString()}</Text>
+                      <Text style={styles.itemPrice}>฿{(Number(unitPrice) || 0).toLocaleString()}</Text>
                       <Text style={{ fontFamily: 'DBHeavent', fontSize: 21, color: '#64748b', marginTop: 4 }}>
                         🗓 เริ่ม: {formatDate(prd.startDate)} - สิ้นสุด: {formatDate(prd.endDate)}
                       </Text>
@@ -539,7 +567,7 @@ function App() {
           let currentPharmValue = 0;
           
           if (expandedStoreId) {
-             const storeInv = inventoryList.filter(i => i.locationType === 'PHARMACY' && i.storeId === expandedStoreId);
+             const storeInv = inventoryList.filter(i => i.locationType === 'PHARMACY' && i.storeId === expandedStoreId && i.quantity > 0);
              currentPharmCount = storeInv.reduce((acc, row) => acc + (row.quantity ?? 0), 0);
              currentPharmValue = storeInv.reduce((acc, row) => {
                const prd = products.find(p => p.id === row.productId);
@@ -557,7 +585,7 @@ function App() {
                 </View>
                 <View style={[styles.summaryIconBox, { backgroundColor: 'rgba(255,255,255,0.2)' }]}><Feather name="home" size={24} color="#ffffff" /></View>
               </View>
-              <Text style={[styles.summaryValueDark, { color: '#eff6ff' }]}>รวมมูลค่า <Text style={[styles.highlightText, { color: '#ffffff' }]}>฿{currentPharmValue.toLocaleString()}</Text></Text>
+              <Text style={[styles.summaryValueDark, { color: '#eff6ff' }]}>รวมมูลค่า <Text style={[styles.highlightText, { color: '#ffffff' }]}>฿{(Number(currentPharmValue) || 0).toLocaleString()}</Text></Text>
             </View>
 
             <View style={styles.sectionHeader}>
@@ -577,7 +605,7 @@ function App() {
               </View>
             ) : (
               stores.filter(s => s.id === expandedStoreId).map(store => {
-                const storeInv = inventoryList.filter(i => i.locationType === 'PHARMACY' && i.storeId === store.id);
+                const storeInv = inventoryList.filter(i => i.locationType === 'PHARMACY' && i.storeId === store.id && i.quantity > 0);
                 return (
                   <View key={store.id} style={styles.storeBlock}>
                     <View style={styles.storeHeader}>
@@ -601,7 +629,7 @@ function App() {
                             <View style={{ flex: 1, paddingRight: 8 }}>
                               <Text style={styles.storeInvName}>{prd?.name || inv.productId}</Text>
                               <Text style={{ fontFamily: 'DBHeavent', fontSize: 23, color: theme.colors.textMuted, marginTop: 2 }}>
-                                ฿{unitPrice.toLocaleString()} / ชิ้น
+                                ฿{(Number(unitPrice) || 0).toLocaleString()} / ชิ้น
                               </Text>
                               <Text style={{ fontFamily: 'DBHeavent', fontSize: 21, color: '#64748b', marginTop: 2 }}>
                                 🗓 เริ่ม: {formatDate(prd?.startDate)} - สิ้นสุด: {formatDate(prd?.endDate)}
@@ -610,7 +638,7 @@ function App() {
                             <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
                               <Text style={styles.storeInvQty}>{inv.quantity} ชิ้น</Text>
                               <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: '#3b82f6', marginTop: 2 }}>
-                                ฿{totalValue.toLocaleString()}
+                                ฿{(Number(totalValue) || 0).toLocaleString()}
                               </Text>
                             </View>
                           </View>
@@ -764,26 +792,47 @@ function App() {
                     if (!prd) return null;
                     
                     let availableStock = 0;
+                    let invItem: any;
                     if (docType === 'SALE' || (docType === 'RETURN' && returnSubtype === 'PHARMACY_TO_SALE')) {
-                       availableStock = inventoryList.find(i => i.productId === prd.id && i.locationType === 'PHARMACY' && i.storeId === selectedStoreId)?.quantity || 0;
+                       invItem = inventoryList.find((i: any) => i.productId === prd.id && i.locationType === 'PHARMACY' && i.storeId === selectedStoreId);
                     } else {
-                       availableStock = inventoryList.find(i => i.productId === prd.id && i.locationType === 'SALE')?.quantity || 0;
+                       invItem = inventoryList.find((i: any) => i.productId === prd.id && i.locationType === 'SALE');
                     }
+                    availableStock = invItem ? (invItem.quantity - (invItem.reservedQuantity || 0)) : 0;
 
                     return (
                       <View key={idx} style={styles.prdSelectRow}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.prdSelectName}>{prd.name}</Text>
                           <Text style={styles.prdSelectStock}>
-                            {docType === 'REQUEST' ? `เบิก: ${line.quantity} ชิ้น` : `มีในสต็อก: `}
-                            {docType !== 'REQUEST' && <Text style={{fontWeight:'bold'}}>{availableStock}</Text>}
+                            {docType === 'REQUEST' ? `เบิก: ${line.quantity} ชิ้น` : `พร้อมใช้: `}
+                            {docType !== 'REQUEST' && (
+                              <Text style={{fontWeight:'bold'}}>
+                                {availableStock}
+                                {invItem?.reservedQuantity > 0 && <Text style={{fontSize: 16, color: '#f97316', fontWeight: 'normal'}}> (ติดจอง {invItem.reservedQuantity})</Text>}
+                              </Text>
+                            )}
                           </Text>
                         </View>
                         <View style={styles.qtyControls}>
                           <TouchableOpacity style={styles.qtyBtn} onPress={() => addTxnLine(prd.id, -1)}>
                             <Feather name="minus" size={16} color={theme.colors.text} />
                           </TouchableOpacity>
-                          <Text style={styles.qtyText}>{line.quantity}</Text>
+                          <TextInput 
+                            style={styles.qtyText} 
+                            keyboardType="numeric" 
+                            selectTextOnFocus
+                            value={line.quantity > 0 ? String(line.quantity) : ''}
+                            onChangeText={(text) => {
+                              const val = parseInt(text.replace(/[^0-9]/g, ''), 10);
+                              setTxnLines(prev => prev.map(l => l.productId === prd.id ? { ...l, quantity: isNaN(val) ? 0 : val } : l));
+                            }} 
+                            onBlur={() => {
+                              if (line.quantity === 0) {
+                                setTxnLines(prev => prev.filter(l => l.productId !== prd.id));
+                              }
+                            }}
+                          />
                           <TouchableOpacity style={styles.qtyBtn} onPress={() => addTxnLine(prd.id, 1)}>
                             <Feather name="plus" size={16} color={theme.colors.text} />
                           </TouchableOpacity>
@@ -821,9 +870,61 @@ function App() {
               </View>
                     </ScrollView>
 
-                    <TouchableOpacity style={styles.submitBtn} onPress={handleSubmitTxn} disabled={loading}>
-                      {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>ยืนยันการทำรายการ</Text>}
-                    </TouchableOpacity>
+                    {(() => {
+                      if (docType === 'REQUEST') return null;
+                      const errors = [];
+                      for (const line of txnLines) {
+                        const prd = products.find((p: any) => p.id === line.productId);
+                        let availableStock = 0;
+        let invItem: any;
+        if (docType === 'SALE' || (docType === 'RETURN' && returnSubtype === 'PHARMACY_TO_SALE')) {
+           invItem = inventoryList.find((i: any) => i.productId === line.productId && i.locationType === 'PHARMACY' && i.storeId === selectedStoreId);
+        } else {
+           invItem = inventoryList.find((i: any) => i.productId === line.productId && i.locationType === 'SALE');
+        }
+        availableStock = invItem ? (invItem.quantity - (invItem.reservedQuantity || 0)) : 0;
+                        if (line.quantity > availableStock) {
+                          errors.push(`"${prd?.name || 'สินค้า'}" (มี ${availableStock} ขาด ${line.quantity - availableStock})`);
+                        }
+                      }
+                      if (errors.length === 0) return null;
+                      return (
+                        <View style={{ marginTop: 16, padding: 12, backgroundColor: '#fef2f2', borderRadius: theme.radius.lg, borderWidth: 1, borderColor: '#fca5a5' }}>
+                          <Text style={{ color: '#ef4444', fontWeight: 'bold', marginBottom: 4 }}>⚠️ สต็อกไม่เพียงพอ ไม่สามารถทำรายการได้:</Text>
+                          {errors.map((e, i) => (
+                            <Text key={i} style={{ color: '#ef4444', marginLeft: 8 }}>• {e}</Text>
+                          ))}
+                        </View>
+                      );
+                    })()}
+
+                    {(() => {
+                      let hasStockError = false;
+                      if (docType !== 'REQUEST') {
+                        for (const line of txnLines) {
+                          let availableStock = 0;
+        let invItem: any;
+        if (docType === 'SALE' || (docType === 'RETURN' && returnSubtype === 'PHARMACY_TO_SALE')) {
+           invItem = inventoryList.find((i: any) => i.productId === line.productId && i.locationType === 'PHARMACY' && i.storeId === selectedStoreId);
+        } else {
+           invItem = inventoryList.find((i: any) => i.productId === line.productId && i.locationType === 'SALE');
+        }
+        availableStock = invItem ? (invItem.quantity - (invItem.reservedQuantity || 0)) : 0;
+                          if (line.quantity > availableStock) {
+                            hasStockError = true; break;
+                          }
+                        }
+                      }
+                      return (
+                        <TouchableOpacity 
+                          style={[styles.submitBtn, hasStockError && { backgroundColor: '#cbd5e1' }]} 
+                          onPress={handleSubmitTxn} 
+                          disabled={loading || hasStockError}
+                        >
+                          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitBtnText}>ยืนยันการทำรายการ</Text>}
+                        </TouchableOpacity>
+                      );
+                    })()}
                   </View>
                 </KeyboardAvoidingView>
               </View>
@@ -862,11 +963,13 @@ function App() {
                       if (isSelected) return null; // Hide already selected
                       
                       let availableStock = 0;
-                      if (docType === 'SALE' || (docType === 'RETURN' && returnSubtype === 'PHARMACY_TO_SALE')) {
-                         availableStock = inventoryList.find(i => i.productId === prd.id && i.locationType === 'PHARMACY' && i.storeId === selectedStoreId)?.quantity || 0;
-                      } else {
-                         availableStock = inventoryList.find(i => i.productId === prd.id && i.locationType === 'SALE')?.quantity || 0;
-                      }
+                    let invItem: any;
+                    if (docType === 'SALE' || (docType === 'RETURN' && returnSubtype === 'PHARMACY_TO_SALE')) {
+                       invItem = inventoryList.find((i: any) => i.productId === prd.id && i.locationType === 'PHARMACY' && i.storeId === selectedStoreId);
+                    } else {
+                       invItem = inventoryList.find((i: any) => i.productId === prd.id && i.locationType === 'SALE');
+                    }
+                    availableStock = invItem ? (invItem.quantity - (invItem.reservedQuantity || 0)) : 0;
 
                       // Only hide products if they are out of stock and it's not a REQUEST transaction
                       if (docType !== 'REQUEST' && availableStock <= 0) return null;
@@ -880,9 +983,13 @@ function App() {
                           <View style={{ flex: 1 }}>
                             <Text style={styles.prdSelectName}>{prd.name}</Text>
                             <Text style={styles.itemSku}>SKU : {prd.sku}</Text>
+                            <Text style={styles.itemSku}>ราคา : ฿{prd.price}</Text>
                           </View>
                           <View style={styles.stockBadge}>
-                            <Text style={styles.stockBadgeText}>สต็อก: {availableStock}</Text>
+                            <Text style={styles.stockBadgeText}>
+                              พร้อมใช้: {availableStock}
+                              {invItem?.reservedQuantity > 0 && ` (ติดจอง ${invItem.reservedQuantity})`}
+                            </Text>
                           </View>
                         </TouchableOpacity>
                       );
@@ -1028,7 +1135,7 @@ function App() {
                           </Text>
                         </View>
 
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: selectedHistoryTxn.approvedByFullName ? 8 : 20 }}>
                           <Text style={styles.historyTag}>{getDocTypeThai(selectedHistoryTxn.docType, selectedHistoryTxn.returnSubtype)}</Text>
                           {selectedHistoryTxn.storeId && (
                             <Text style={[styles.historyTag, {backgroundColor: '#eff6ff', color: '#1d4ed8'}]}>
@@ -1037,6 +1144,16 @@ function App() {
                           )}
                           <View style={{ marginTop: 2 }}>{renderStatusBadge(selectedHistoryTxn.status)}</View>
                         </View>
+
+                        {selectedHistoryTxn.approvedByFullName && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+                            <Feather name={selectedHistoryTxn.status === 'REJECTED' ? "user-x" : "user-check"} size={16} color={theme.colors.textMuted} style={{ marginRight: 6 }} />
+                            <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.textMuted }}>
+                              {selectedHistoryTxn.status === 'REJECTED' ? 'ปฏิเสธโดย: ' : 'อนุมัติโดย: '} 
+                              <Text style={{ color: theme.colors.text }}>{selectedHistoryTxn.approvedByFullName}</Text>
+                            </Text>
+                          </View>
+                        )}
                         
                         {selectedHistoryTxn.remark && (
                           <View style={{ marginBottom: 20 }}>
@@ -1056,11 +1173,11 @@ function App() {
                                 <View style={{ flex: 1, paddingRight: 12 }}>
                                   <Text style={{ fontFamily: 'DBHeavent', fontSize: 26, color: theme.colors.text, fontWeight: 'bold' }}>{prd?.name || l.productId}</Text>
                                   {prd?.sku && <Text style={{ fontFamily: 'DBHeavent', fontSize: 22, color: theme.colors.textMuted }}>SKU : {prd.sku}</Text>}
-                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.textMuted, marginTop: 4 }}>฿{unitPrice.toLocaleString()} / ชิ้น</Text>
+                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.textMuted, marginTop: 4 }}>฿{(Number(unitPrice) || 0).toLocaleString()} / ชิ้น</Text>
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
                                   <Text style={{ fontFamily: 'DBHeavent', fontSize: 28, color: theme.colors.primaryDark }}>{l.quantity} ชิ้น</Text>
-                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 25, color: theme.colors.textMuted, marginTop: 4 }}>฿{total.toLocaleString()}</Text>
+                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 25, color: theme.colors.textMuted, marginTop: 4 }}>฿{(Number(total) || 0).toLocaleString()}</Text>
                                 </View>
                               </View>
                             );
@@ -1715,7 +1832,8 @@ const styles = StyleSheet.create({
   qtyText: {
     fontFamily: 'DBHeavent',
     fontSize: 28,
-    width: 36,
+    width: 50,
+    padding: 0,
     textAlign: 'center',
     color: theme.colors.text,
   },
