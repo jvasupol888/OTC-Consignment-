@@ -5,3 +5,4 @@ export * from './stores.js';
 export * from './inventory.js';
 export * from './transactions.js';
 export * from './stock-movements.js';
+export * from './audit-logs.js';

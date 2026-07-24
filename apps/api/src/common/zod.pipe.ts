@@ -8,6 +8,7 @@ export class ZodBody<T> implements PipeTransform {
   transform(value: unknown): T {
     const result = this.schema.safeParse(value);
     if (!result.success) {
+      console.error('Zod Validation Failed:', result.error.flatten());
       throw new BadRequestException({
         message: 'ข้อมูลไม่ถูกต้อง',
         errors: result.error.flatten(),

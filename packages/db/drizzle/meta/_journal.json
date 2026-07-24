@@ -8,6 +8,34 @@
       "when": 1784205170369,
       "tag": "0000_fresh_colossus",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784274375797,
+      "tag": "0001_flowery_norrin_radd",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784617615072,
+      "tag": "0002_curved_mister_fear",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784618562191,
+      "tag": "0003_cute_polaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784619582623,
+      "tag": "0004_colossal_husk",
+      "breakpoints": true
     }
   ]
 }

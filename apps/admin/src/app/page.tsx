@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
+import toast from 'react-hot-toast';
 import {
   authApi,
   productsApi,
@@ -11,12 +13,130 @@ import {
   dashboardApi,
   BASE,
 } from '../lib/api';
+import PrintTxn from '../components/PrintTxn';
+
+
+const formatDate = (dateStr: string | Date | null | undefined) => {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, '0');
+  const mins = String(d.getMinutes()).padStart(2, '0');
+  return `${day}-${month}-${year} ${hours}:${mins}`;
+};
+
+const formatDateOnly = (dateStr: string | Date | null | undefined) => {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '-';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+};
+
+const PaginationControls = ({ 
+  currentPage, 
+  totalPages, 
+  onPageChange, 
+  pageSize, 
+  onPageSizeChange, 
+  totalItems 
+}: { 
+  currentPage: number, 
+  totalPages: number, 
+  onPageChange: (p: number) => void,
+  pageSize: number,
+  onPageSizeChange: (s: number) => void,
+  totalItems: number
+}) => {
+  let startPage = Math.max(1, currentPage - 2);
+  let endPage = Math.min(totalPages || 1, startPage + 4);
+  
+  if (endPage - startPage < 4) {
+    startPage = Math.max(1, endPage - 4);
+  }
+
+  const pages = [];
+  for (let i = startPage; i <= endPage; i++) {
+    pages.push(i);
+  }
+
+  return (
+    <div className="flex items-center justify-between p-4 border-t border-slate-100 bg-white">
+      <div className="flex items-center gap-2">
+        <span className="text-[20px] text-slate-500">แสดงรายการ</span>
+        <select
+          value={pageSize}
+          onChange={(e) => { onPageSizeChange(Number(e.target.value)); onPageChange(1); }}
+          className="border border-slate-200 rounded-lg px-2 py-1 text-[20px] text-slate-700 bg-white outline-none focus:border-emerald-500"
+        >
+          <option value={10}>10</option>
+          <option value={50}>50</option>
+          <option value={100}>100</option>
+        </select>
+        <span className="text-[20px] text-slate-500">จากทั้งหมด {totalItems} รายการ</span>
+      </div>
+
+      <div className="flex items-center rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+        <button 
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="px-3 py-1.5 border-r border-slate-200 bg-white text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 disabled:bg-slate-50 transition-colors text-[20px] font-bold"
+        >
+          &laquo;
+        </button>
+        <button 
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="px-3 py-1.5 border-r border-slate-200 bg-white text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 disabled:bg-slate-50 transition-colors text-[20px] font-bold"
+        >
+          &lsaquo;
+        </button>
+        {pages.map(page => (
+          <button
+            key={page}
+            onClick={() => onPageChange(page)}
+            className={`px-3.5 py-1.5 border-r border-slate-200 transition-colors text-[20px] font-bold ${
+              currentPage === page 
+                ? 'bg-emerald-600 text-white' 
+                : 'bg-white text-emerald-600 hover:bg-emerald-50'
+            }`}
+          >
+            {page}
+          </button>
+        ))}
+        <button 
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || totalPages === 0}
+          className="px-3 py-1.5 border-r border-slate-200 bg-white text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 disabled:bg-slate-50 transition-colors text-[20px] font-bold"
+        >
+          &rsaquo;
+        </button>
+        <button 
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages || totalPages === 0}
+          className="px-3 py-1.5 bg-white text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 disabled:bg-slate-50 transition-colors text-[20px] font-bold"
+        >
+          &raquo;
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [loading, setLoading] = useState<boolean>(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importType, setImportType] = useState<string>('');
+  const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
+  const [showImportPreviewModal, setShowImportPreviewModal] = useState<boolean>(false);
 
   // Form states for login
   const [usernameInput, setUsernameInput] = useState('');
@@ -33,6 +153,11 @@ export default function AdminPage() {
   const [stores, setStores] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [inventoryList, setInventoryList] = useState<any[]>([]);
+  
+  // Dashboard filter states
+  const [dashStartDate, setDashStartDate] = useState('');
+  const [dashEndDate, setDashEndDate] = useState('');
+  const [dashSaleUserId, setDashSaleUserId] = useState('ยอดรวมทั้งหมด');
 
   // Accordion states
   const [inventoryAccordions, setInventoryAccordions] = useState<Record<string, boolean>>({
@@ -45,6 +170,9 @@ export default function AdminPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showProductPicker, setShowProductPicker] = useState<boolean>(false);
+  const [showPharmacyPicker, setShowPharmacyPicker] = useState<boolean>(false);
+  const [showPrintPreview, setShowPrintPreview] = useState<boolean>(false);
   const [cancelReason, setCancelReason] = useState('');
 
   // CRUD Modal states
@@ -54,11 +182,11 @@ export default function AdminPage() {
 
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [editingStore, setEditingStore] = useState<any>(null);
-  const [storeForm, setStoreForm] = useState({ name: '', location: '', assignedUserId: '' });
+  const [storeForm, setStoreForm] = useState({ name: '', location: '', province: '', storageLocation: '', phone: '', assignedUserId: '' });
 
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
-  const [userForm, setUserForm] = useState({ username: '', password: '', fullName: '', role: 'SALE', status: 'ACTIVE' });
+  const [userForm, setUserForm] = useState({ code: '', username: '', password: '', fullName: '', role: 'SALE', status: 'ACTIVE' });
 
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferStoreId, setTransferStoreId] = useState('');
@@ -67,7 +195,70 @@ export default function AdminPage() {
   // Sub-tabs
   const [invSubTab, setInvSubTab] = useState<'sale' | 'pharm'>('sale');
   const [masterSubTab, setMasterSubTab] = useState<'products' | 'stores' | 'users'>('products');
+  const [selectedInventoryOwner, setSelectedInventoryOwner] = useState<string>('');
+  
+  const [selectedApprovals, setSelectedApprovals] = useState<string[]>([]);
+  const [isApproving, setIsApproving] = useState(false);
+  const [showApproveConfirmModal, setShowApproveConfirmModal] = useState(false);
+  const [approvalFilterStatus, setApprovalFilterStatus] = useState<string>('ALL');
+  const [approvalSearchText, setApprovalSearchText] = useState<string>('');
+  const [singleApproveDocNo, setSingleApproveDocNo] = useState<string | null>(null);
 
+  // Pagination for masters
+  const [productPage, setProductPage] = useState(1);
+  const [productPageSize, setProductPageSize] = useState(10);
+  const [storePage, setStorePage] = useState(1);
+  const [storePageSize, setStorePageSize] = useState(10);
+  const [userPage, setUserPage] = useState(1);
+  const [userPageSize, setUserPageSize] = useState(10);
+  
+  // Pagination for approvals
+  const [approvalPage, setApprovalPage] = useState(1);
+  const [approvalPageSize, setApprovalPageSize] = useState(10);
+
+  const handleSelectAllApprovals = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      const pendingDocs = allTxns.filter((t: any) => t.status === 'PENDING').map((t: any) => t.docNo);
+      setSelectedApprovals(pendingDocs);
+    } else {
+      setSelectedApprovals([]);
+    }
+  };
+
+  const handleSelectApproval = (docNo: string) => {
+    if (selectedApprovals.includes(docNo)) {
+      setSelectedApprovals(selectedApprovals.filter(d => d !== docNo));
+    } else {
+      setSelectedApprovals([...selectedApprovals, docNo]);
+    }
+  };
+
+  const handleBulkApproveClick = () => {
+    if (!selectedApprovals.length) return;
+    setShowApproveConfirmModal(true);
+  };
+
+  const handleConfirmBulkApprove = async () => {
+    if (!selectedApprovals.length || !token) return;
+    
+    setIsApproving(true);
+    try {
+      for (const docNo of selectedApprovals) {
+         await transactionsApi.approve(docNo, token);
+      }
+      toast.success('อนุมัติเอกสารทั้งหมดสำเร็จ');
+      setSelectedApprovals([]);
+      setShowApproveConfirmModal(false);
+      const pending = await transactionsApi.pending(token);
+      const all = await transactionsApi.list(token);
+      setPendingTxns(pending);
+      setAllTxns(all);
+    } catch (err: any) {
+      toast.error(err.message || 'เกิดข้อผิดพลาดในการอนุมัติ');
+    } finally {
+      setIsApproving(false);
+    }
+  };
   useEffect(() => {
     const savedToken = localStorage.getItem('otc_token');
     const savedUser = localStorage.getItem('otc_user');
@@ -78,52 +269,64 @@ export default function AdminPage() {
     setLoading(false);
   }, []);
 
+  const fetchData = async () => {
+    if (!token) return;
+    try {
+      if (activeTab === 'dashboard') {
+        const statsData = await dashboardApi.getStats(token, {
+          startDate: dashStartDate || undefined,
+          endDate: dashEndDate || undefined,
+          saleUserId: dashSaleUserId === 'ยอดรวมทั้งหมด' ? undefined : dashSaleUserId,
+        });
+        setStats(statsData);
+        setRecentTxns(statsData.recentTxns || []);
+        if (users.length === 0) {
+          const u = await usersApi.list(token);
+          setUsers(u);
+        }
+      } else if (activeTab === 'approvals') {
+        const pending = await transactionsApi.pending(token);
+        const all = await transactionsApi.list(token);
+        setPendingTxns(pending);
+        setAllTxns(all);
+        if (stores.length === 0) {
+          const s = await storesApi.list(token);
+          setStores(s);
+        }
+      } else if (activeTab === 'inventory') {
+        const data = await inventoryApi.list(token);
+        setInventoryList(data);
+        // Pre-fetch stores and users to display names nicely
+        const p = await productsApi.list(token);
+        setProducts(p);
+        const s = await storesApi.list(token);
+        setStores(s);
+        const u = await usersApi.list(token);
+        setUsers(u);
+      } else if (activeTab === 'masters') {
+        const p = await productsApi.list(token);
+        setProducts(p);
+        const s = await storesApi.list(token);
+        setStores(s);
+        const u = await usersApi.list(token);
+        setUsers(u);
+      }
+    } catch (err: any) {
+      if (err.message && (err.message.includes('401') || err.message.includes('Unauthorized'))) {
+        localStorage.removeItem('otc_token');
+        localStorage.removeItem('otc_user');
+        setToken(null);
+        setUser(null);
+      } else {
+        console.error('Error fetching data:', err);
+      }
+    }
+  };
+
   // Fetch data depending on active tab
   useEffect(() => {
-    if (!token) return;
-
-    const fetchData = async () => {
-      try {
-        if (activeTab === 'dashboard') {
-          const statsData = await dashboardApi.getStats(token);
-          setStats(statsData);
-          setRecentTxns(statsData.recentTxns || []);
-        } else if (activeTab === 'approvals') {
-          const pending = await transactionsApi.pending(token);
-          const all = await transactionsApi.list(token);
-          setPendingTxns(pending);
-          setAllTxns(all);
-        } else if (activeTab === 'inventory') {
-          const data = await inventoryApi.list(token);
-          setInventoryList(data);
-          // Pre-fetch stores and users to display names nicely
-          const p = await productsApi.list(token);
-          setProducts(p);
-          const s = await storesApi.list(token);
-          setStores(s);
-          const u = await usersApi.list(token);
-          setUsers(u);
-        } else if (activeTab === 'masters') {
-          const p = await productsApi.list(token);
-          setProducts(p);
-          const s = await storesApi.list(token);
-          setStores(s);
-          const u = await usersApi.list(token);
-          setUsers(u);
-        }
-      } catch (err: any) {
-        console.error('Error fetching data:', err);
-        if (err.message && (err.message.includes('401') || err.message.includes('Unauthorized'))) {
-          localStorage.removeItem('otc_token');
-          localStorage.removeItem('otc_user');
-          setToken(null);
-          setUser(null);
-        }
-      }
-    };
-
     fetchData();
-  }, [token, activeTab]);
+  }, [token, activeTab, dashStartDate, dashEndDate, dashSaleUserId]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,6 +348,210 @@ export default function AdminPage() {
     }
   };
 
+  
+  const handleDownloadTemplate = (type: string) => {
+    let ws;
+    let filename = '';
+    if (type === 'products') {
+      ws = XLSX.utils.json_to_sheet([{
+        'SKU': '',
+        'ชื่อสินค้า': '',
+        'ราคา': '',
+        'วันที่เริ่มต้น(DD-MM-YYYY)': '',
+        'วันที่สิ้นสุด(DD-MM-YYYY)': ''
+      }]);
+      filename = 'Products_Template.xlsx';
+    } else if (type === 'stores') {
+      ws = XLSX.utils.json_to_sheet([{
+        'ชื่อร้านค้า': '',
+        'ที่อยู่': '',
+        'จังหวัด': '',
+        'ตำแหน่งเก็บ': '',
+        'เบอร์โทรศัพท์': '',
+        'รหัสเซลล์ผู้รับผิดชอบ (Optional)': ''
+      }]);
+      filename = 'Stores_Template.xlsx';
+    } else if (type === 'users') {
+      ws = XLSX.utils.json_to_sheet([{
+        'Username': '',
+        'Password': '',
+        'ชื่อ-นามสกุล': '',
+        'Role (SALE/ADMIN/SYSTEM_ADMIN)': ''
+      }]);
+      filename = 'Users_Template.xlsx';
+    }
+    if (ws) {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Template');
+      XLSX.writeFile(wb, filename);
+    }
+  };
+
+  
+  const handleExportData = (type: string) => {
+    let ws;
+    let filename = '';
+    if (type === 'products') {
+      const exportData = products.map((p: any) => ({
+        'SKU': p.sku,
+        'ชื่อสินค้า': p.name,
+        'ราคา': p.price,
+        'วันที่เริ่มต้น(DD-MM-YYYY)': p.startDate ? p.startDate.split('T')[0].split('-').reverse().join('-') : '',
+        'วันที่สิ้นสุด(DD-MM-YYYY)': p.endDate ? p.endDate.split('T')[0].split('-').reverse().join('-') : '',
+        'สถานะ': p.status,
+        'รหัสอ้างอิงระบบ': p.code
+      }));
+      ws = XLSX.utils.json_to_sheet(exportData);
+      filename = 'Products_Export.xlsx';
+    } else if (type === 'stores') {
+      const exportData = stores.map((s: any) => ({
+        'ชื่อร้านค้า': s.name,
+        'ที่อยู่': s.location || '',
+        'จังหวัด': s.province || '',
+        'ตำแหน่งเก็บ': s.storageLocation || '',
+        'เบอร์โทรศัพท์': s.phone || '',
+        'รหัสเซลล์ผู้รับผิดชอบ': s.assignedUserFullName || s.assignedUserId || '',
+        'สถานะ': s.status,
+        'รหัสอ้างอิงระบบ': s.code
+      }));
+      ws = XLSX.utils.json_to_sheet(exportData);
+      filename = 'Stores_Export.xlsx';
+    } else if (type === 'users') {
+      const exportData = users.map((u: any) => ({
+        'Username': u.username,
+        'ชื่อ-นามสกุล': u.fullName,
+        'Role': u.role,
+        'สถานะ': u.status,
+        'รหัสอ้างอิงระบบ': u.code
+      }));
+      ws = XLSX.utils.json_to_sheet(exportData);
+      filename = 'Users_Export.xlsx';
+    }
+    
+    if (ws) {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Export Data');
+      XLSX.writeFile(wb, filename);
+    }
+  };
+  const handleDownloadPdf = async (docNo: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${BASE}/export/transactions/${docNo}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `consignment-${docNo}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast.error('ไม่สามารถดาวน์โหลด PDF ได้');
+    }
+  };
+
+
+  const parseExcelDate = (val: any, fieldName: string, rowIndex: number) => {
+    if (!val) return undefined;
+    let d: Date | null = null;
+
+    if (typeof val === 'number') {
+      d = new Date(Math.round((val - 25569) * 864e5));
+    } else if (typeof val === 'string') {
+      const parts = val.split(/[-/]/);
+      if (parts.length === 3 && parts[2].length === 4) {
+        d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`);
+      } else {
+        d = new Date(val);
+      }
+    } else {
+      d = new Date(val);
+    }
+
+    if (!d || isNaN(d.getTime())) {
+      throw new Error(`ข้อมูลในคอลัมน์ "${fieldName}" แถวที่ ${rowIndex} ไม่ถูกต้อง (ระบุ: ${val}) กรุณาตรวจสอบให้เป็นรูปแบบวันที่ที่ถูกต้อง`);
+    }
+
+    if (d.getFullYear() > 2100) {
+      throw new Error(`ข้อมูลปีในคอลัมน์ "${fieldName}" แถวที่ ${rowIndex} ไม่ถูกต้อง (ระบุมาเป็นปี ${d.getFullYear()}) กรุณาระบุเป็นปี ค.ศ. เท่านั้น (เช่น 2026)`);
+    }
+
+    return d.toISOString().split('T')[0];
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: 'array' });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const jsonData = XLSX.utils.sheet_to_json(ws);
+      
+      let payload: any[] = [];
+      if (importType === 'products') {
+        payload = jsonData.map((row: any, idx: number) => ({
+          sku: String(row['SKU'] || ''),
+          name: String(row['ชื่อสินค้า'] || ''),
+          price: Number(Number(row['ราคา'] || 0).toFixed(2)),
+          startDate: parseExcelDate(row['วันที่เริ่มต้น(DD-MM-YYYY)'], 'วันที่เริ่มต้น(DD-MM-YYYY)', idx + 2),
+          endDate: parseExcelDate(row['วันที่สิ้นสุด(DD-MM-YYYY)'], 'วันที่สิ้นสุด(DD-MM-YYYY)', idx + 2),
+        }));
+      } else if (importType === 'stores') {
+        payload = jsonData.map((row: any) => ({
+          name: String(row['ชื่อร้านค้า'] || ''),
+          location: String(row['ที่อยู่'] || ''),
+          storageLocation: String(row['ตำแหน่งเก็บ'] || ''),
+          phone: String(row['เบอร์โทรศัพท์'] || ''),
+          assignedUserId: row['รหัสเซลล์ผู้รับผิดชอบ (Optional)'] || undefined
+        }));
+      } else if (importType === 'users') {
+        payload = jsonData.map((row: any) => ({
+          username: String(row['Username'] || ''),
+          password: String(row['Password'] || ''),
+          fullName: String(row['ชื่อ-นามสกุล'] || ''),
+          role: String(row['Role (SALE/ADMIN/SYSTEM_ADMIN)'] || 'SALE'),
+        }));
+      }
+      
+      setImportPreviewData(payload);
+      setShowImportPreviewModal(true);
+    } catch (error: any) {
+      toast.error(error.message || 'การนำเข้าข้อมูลล้มเหลว กรุณาตรวจสอบไฟล์');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreviewData.length || !token) return;
+    try {
+      if (importType === 'products') {
+        await productsApi.bulkImport(importPreviewData, token);
+        toast.success('นำเข้าข้อมูลสินค้าสำเร็จ');
+      } else if (importType === 'stores') {
+        await storesApi.bulkImport(importPreviewData, token);
+        toast.success('นำเข้าข้อมูลร้านค้าสำเร็จ');
+      } else if (importType === 'users') {
+        await usersApi.bulkImport(importPreviewData, token);
+        toast.success('นำเข้าข้อมูลผู้ใช้งานสำเร็จ');
+      }
+      await fetchData();
+      setShowImportPreviewModal(false);
+      setImportPreviewData([]);
+    } catch (error: any) {
+      toast.error(error.message || 'การนำเข้าข้อมูลล้มเหลว');
+    }
+  };
+
+
   const handleLogout = () => {
     localStorage.removeItem('otc_token');
     localStorage.removeItem('otc_user');
@@ -163,23 +570,31 @@ export default function AdminPage() {
       const detailed = await transactionsApi.get(docNo, token);
       setSelectedTxn(detailed);
     } catch (err: any) {
-      alert(`โหลดรายละเอียดล้มเหลว: ${err.message}`);
+      toast.error(`โหลดรายละเอียดล้มเหลว: ${err.message}`);
     }
   };
 
-  const handleApproveTxn = async (docNo: string) => {
-    if (!token || !confirm(`ยืนยันการอนุมัติเอกสาร ${docNo}?`)) return;
+  const handleApproveTxnClick = (docNo: string) => {
+    setSingleApproveDocNo(docNo);
+  };
+
+  const handleConfirmSingleApprove = async () => {
+    if (!token || !singleApproveDocNo) return;
+    setIsApproving(true);
     try {
-      await transactionsApi.approve(docNo, token);
-      alert('อนุมัติเอกสารสำเร็จ');
+      await transactionsApi.approve(singleApproveDocNo, token);
+      toast.success('อนุมัติเอกสารสำเร็จ');
       setSelectedTxn(null);
+      setSingleApproveDocNo(null);
       // Reload lists
       const pending = await transactionsApi.pending(token);
       const all = await transactionsApi.list(token);
       setPendingTxns(pending);
       setAllTxns(all);
     } catch (err: any) {
-      alert(`อนุมัติล้มเหลว: ${err.message}`);
+      toast.error(`อนุมัติล้มเหลว: ${err.message}`);
+    } finally {
+      setIsApproving(false);
     }
   };
 
@@ -187,7 +602,7 @@ export default function AdminPage() {
     if (!token || !selectedTxn || !rejectReason.trim()) return;
     try {
       await transactionsApi.reject(selectedTxn.docNo, rejectReason, token);
-      alert('ปฏิเสธเอกสารสำเร็จ');
+      toast.success('ปฏิเสธเอกสารสำเร็จ');
       setSelectedTxn(null);
       setShowRejectModal(false);
       setRejectReason('');
@@ -196,7 +611,7 @@ export default function AdminPage() {
       setPendingTxns(pending);
       setAllTxns(all);
     } catch (err: any) {
-      alert(`ปฏิเสธล้มเหลว: ${err.message}`);
+      toast.error(`ปฏิเสธล้มเหลว: ${err.message}`);
     }
   };
 
@@ -204,7 +619,7 @@ export default function AdminPage() {
     if (!token || !selectedTxn) return;
     try {
       await transactionsApi.cancel(selectedTxn.docNo, cancelReason, token);
-      alert('ยกเลิกเอกสารและคืนยอดสต็อกสำเร็จ');
+      toast.success('ยกเลิกเอกสารและคืนยอดสต็อกสำเร็จ');
       setSelectedTxn(null);
       setShowCancelModal(false);
       setCancelReason('');
@@ -213,7 +628,7 @@ export default function AdminPage() {
       setPendingTxns(pending);
       setAllTxns(all);
     } catch (err: any) {
-      alert(`ยกเลิกล้มเหลว: ${err.message}`);
+      toast.error(`ยกเลิกล้มเหลว: ${err.message}`);
     }
   };
 
@@ -224,10 +639,10 @@ export default function AdminPage() {
     try {
       if (editingProduct) {
         await productsApi.update(editingProduct.id, productForm, token);
-        alert('แก้ไขสินค้าสำเร็จ');
+        toast.success('แก้ไขสินค้าสำเร็จ');
       } else {
         await productsApi.create(productForm, token);
-        alert('สร้างสินค้าสำเร็จ');
+        toast.success('สร้างสินค้าสำเร็จ');
       }
       setShowProductModal(false);
       setEditingProduct(null);
@@ -235,7 +650,7 @@ export default function AdminPage() {
       const p = await productsApi.list(token);
       setProducts(p);
     } catch (err: any) {
-      alert(`ดำเนินการล้มเหลว: ${err.message}`);
+      toast.error(`ดำเนินการล้มเหลว: ${err.message}`);
     }
   };
 
@@ -261,11 +676,25 @@ export default function AdminPage() {
       const p = await productsApi.list(token);
       setProducts(p);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
   // CRUD Store Actions
+  
+  const handleToggleStoreStatus = async (store: any) => {
+    if (!token) return;
+    try {
+      const nextStatus = store.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+      await storesApi.update(store.id, { ...store, status: nextStatus }, token);
+      toast.success('อัปเดตสถานะร้านค้าสำเร็จ');
+      const s = await storesApi.list(token);
+      setStores(s);
+    } catch (err: any) {
+      toast.error(`อัปเดตสถานะล้มเหลว: ${err.message}`);
+    }
+  };
+
   const handleStoreSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
@@ -276,18 +705,18 @@ export default function AdminPage() {
       };
       if (editingStore) {
         await storesApi.update(editingStore.id, data, token);
-        alert('แก้ไขร้านค้าสำเร็จ');
+        toast.success('แก้ไขร้านค้าสำเร็จ');
       } else {
         await storesApi.create(data, token);
-        alert('สร้างร้านค้าสำเร็จ');
+        toast.success('สร้างร้านค้าสำเร็จ');
       }
       setShowStoreModal(false);
       setEditingStore(null);
-      setStoreForm({ name: '', location: '', assignedUserId: '' });
+      setStoreForm({ name: '', location: '', province: '', storageLocation: '', phone: '', assignedUserId: '' });
       const s = await storesApi.list(token);
       setStores(s);
     } catch (err: any) {
-      alert(`ดำเนินการล้มเหลว: ${err.message}`);
+      toast.error(`ดำเนินการล้มเหลว: ${err.message}`);
     }
   };
 
@@ -296,6 +725,9 @@ export default function AdminPage() {
     setStoreForm({
       name: st.name,
       location: st.location || '',
+      province: st.province || '',
+      storageLocation: st.storageLocation || '',
+      phone: st.phone || '',
       assignedUserId: st.assignedUserId || '',
     });
     setShowStoreModal(true);
@@ -306,14 +738,14 @@ export default function AdminPage() {
     if (!token || !transferStoreId || !transferTargetUserId) return;
     try {
       await storesApi.transfer(transferStoreId, transferTargetUserId, token);
-      alert('โอนย้ายความรับผิดชอบร้านค้าสำเร็จ');
+      toast.success('โอนย้ายความรับผิดชอบร้านค้าสำเร็จ');
       setShowTransferModal(false);
       setTransferStoreId('');
       setTransferTargetUserId('');
       const s = await storesApi.list(token);
       setStores(s);
     } catch (err: any) {
-      alert(`โอนย้ายล้มเหลว: ${err.message}`);
+      toast.error(`โอนย้ายล้มเหลว: ${err.message}`);
     }
   };
 
@@ -321,11 +753,11 @@ export default function AdminPage() {
     if (!token || !confirm('ยืนยันลบร้านค้านี้ออกจากระบบ?')) return;
     try {
       await storesApi.delete(id, token);
-      alert('ลบร้านค้าสำเร็จ');
+      toast.success('ลบร้านค้าสำเร็จ');
       const s = await storesApi.list(token);
       setStores(s);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -336,26 +768,27 @@ export default function AdminPage() {
     try {
       if (editingUser) {
         const payload: any = { ...userForm };
-        if (!payload.password) delete payload.password; // อย่าส่งรหัสผ่านว่าง
+        if (!payload.password || payload.password.trim() === '') delete payload.password; // อย่าส่งรหัสผ่านว่าง
         await usersApi.update(editingUser.id, payload, token);
-        alert('แก้ไขผู้ใช้งานสำเร็จ');
+        toast.success('แก้ไขผู้ใช้งานสำเร็จ');
       } else {
         await usersApi.create(userForm, token);
-        alert('สร้างผู้ใช้งานสำเร็จ');
+        toast.success('สร้างผู้ใช้งานสำเร็จ');
       }
       setShowUserModal(false);
       setEditingUser(null);
-      setUserForm({ username: '', password: '', fullName: '', role: 'SALE', status: 'ACTIVE' });
+      setUserForm({ code: '', username: '', password: '', fullName: '', role: 'SALE', status: 'ACTIVE' });
       const u = await usersApi.list(token);
       setUsers(u);
     } catch (err: any) {
-      alert(`ดำเนินการล้มเหลว: ${err.message}`);
+      toast.error(`ดำเนินการล้มเหลว: ${err.message}`);
     }
   };
 
   const handleEditUser = (usr: any) => {
     setEditingUser(usr);
     setUserForm({
+      code: usr.code || '',
       username: usr.username,
       password: '',
       fullName: usr.fullName,
@@ -374,14 +807,29 @@ export default function AdminPage() {
       const u = await usersApi.list(token);
       setUsers(u);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
+
+  const filteredApprovals = allTxns.filter((t: any) => {
+    if (approvalFilterStatus !== 'ALL' && t.status !== approvalFilterStatus) return false;
+    if (approvalSearchText) {
+      const s = approvalSearchText.toLowerCase();
+      if (
+        !(t.docNo?.toLowerCase().includes(s)) &&
+        !(t.creatorName?.toLowerCase().includes(s)) &&
+        !(t.storeName?.toLowerCase().includes(s))
+      ) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-emerald-600 font-bold animate-pulse text-lg">กำลังโหลดข้อมูลระบบ...</div>
+        <div className="text-emerald-600 font-bold animate-pulse text-2xl">กำลังโหลดข้อมูลระบบ...</div>
       </div>
     );
   }
@@ -390,8 +838,8 @@ export default function AdminPage() {
   if (!token) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#f4fbf7] via-[#ffffff] to-[#e8f5e9] p-4 relative overflow-hidden">
-        <div className="absolute top-24 left-24 w-72 h-72 bg-emerald-100/40 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-24 right-24 w-72 h-72 bg-green-100/40 rounded-full blur-3xl"></div>
+        <div className="absolute top-24 left-24 w-72 h-72 bg-emerald-100/40 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-24 right-24 w-72 h-72 bg-green-100/40 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="w-full max-w-md bg-white border border-slate-100 rounded-3xl shadow-2xl p-8 text-slate-800 relative z-10">
           <div className="text-center mb-8">
@@ -400,37 +848,43 @@ export default function AdminPage() {
               alt="Nutrition Profess Logo"
               className="h-16 mx-auto object-contain mb-4"
             />
-            <h1 className="text-xl font-bold tracking-wide text-slate-800">Wesell Consignment</h1>
-            <p className="text-slate-500 text-xs mt-1 uppercase font-semibold tracking-wider">Nutrition Profess Co., Ltd. (Admin Panel)</p>
+            <h1 className="text-3xl font-bold tracking-wide text-slate-800">Wesell Consignment</h1>
+            <p className="text-slate-500 text-[21px] mt-1 uppercase font-semibold tracking-wider">Nutrition Profess Co., Ltd. (Admin Panel)</p>
           </div>
 
           {loginError && (
-            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl flex items-center gap-2">
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-[21px] rounded-xl flex items-center gap-2">
               <span>⚠️ {loginError}</span>
             </div>
           )}
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Username</label>
+              <label htmlFor="username" className="block text-[21px] font-bold text-slate-500 uppercase tracking-wider mb-2">Username</label>
               <input
+                id="username"
+                name="username"
                 type="text"
                 required
+                autoComplete="username"
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-sm font-semibold"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-[21px] font-normal"
                 placeholder="กรอกชื่อผู้ใช้งาน"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Password</label>
+              <label htmlFor="password" className="block text-[21px] font-bold text-slate-500 uppercase tracking-wider mb-2">Password</label>
               <input
+                id="password"
+                name="password"
                 type="password"
                 required
+                autoComplete="current-password"
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-sm font-semibold"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all text-[21px] font-normal"
                 placeholder="กรอกรหัสผ่าน"
               />
             </div>
@@ -438,7 +892,7 @@ export default function AdminPage() {
             <button
               type="submit"
               disabled={loggingIn}
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 text-[21px] disabled:opacity-50"
             >
               {loggingIn ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
             </button>
@@ -450,65 +904,84 @@ export default function AdminPage() {
 
   // LOGGED IN: MAIN APP LAYOUT
   return (
-    <div className="min-h-screen flex overflow-hidden h-screen bg-slate-50">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 text-slate-600">
+    <>
+    <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".xlsx, .xls" />
+    <div className="flex h-screen overflow-hidden bg-slate-50 print:hidden">
+      {/* Sidebar - Clean Light Theme */}
+      <aside className="w-[280px] bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 text-slate-700 shadow-[2px_0_10px_rgba(0,0,0,0.02)]">
         <div>
           {/* Brand Header */}
-          <div className="p-6 border-b border-slate-100 flex flex-col gap-2">
+          <div className="p-6 pb-8 border-b border-slate-100 flex flex-col gap-1">
             <img
               src="https://vulcancoalition.com/wp-content/uploads/2024/11/Nutrition-New.webp"
               alt="Nutrition Profess"
-              className="h-10 object-contain self-start"
+              className="h-16 object-contain self-start"
             />
-            <div>
-              <h2 className="text-slate-800 font-extrabold text-sm tracking-wide">Wesell Consignment</h2>
-              <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Consign Management</span>
-            </div>
+            <h2 className="text-slate-900 font-bold text-[21px] tracking-wide mt-2">Wesell Consignment</h2>
+            <span className="text-[18px] text-emerald-600 font-bold uppercase tracking-wider">CONSIGN MANAGEMENT</span>
           </div>
 
           {/* Navigation Menu */}
           <nav className="p-4 space-y-1">
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all ${
                 activeTab === 'dashboard'
-                  ? 'bg-emerald-50 text-emerald-700 font-bold border-l-4 border-emerald-600'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  ? 'bg-emerald-50 text-emerald-700 font-bold'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
               }`}
             >
-              <span className="text-sm">Dashboard</span>
+              <span className={`w-5 h-5 ${activeTab === 'dashboard' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" /></svg>
+              </span>
+              <span className="text-[21px] tracking-wide">Dashboard</span>
             </button>
 
             <button
               onClick={() => setActiveTab('approvals')}
-              className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-left transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all ${
                 activeTab === 'approvals'
-                  ? 'bg-emerald-50 text-emerald-700 font-bold border-l-4 border-emerald-600'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  ? 'bg-emerald-50 text-emerald-700 font-bold'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
               }`}
             >
-              <span className="text-sm">การอนุมัติ</span>
+              <span className={`w-5 h-5 ${activeTab === 'approvals' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" /></svg>
+              </span>
+              <span className="text-[21px] tracking-wide">การอนุมัติ</span>
+              {pendingTxns.length > 0 && (
+                <span className="ml-auto bg-emerald-100 text-emerald-800 text-[18px] font-bold px-2 py-0.5 rounded-full">
+                  {pendingTxns.length}
+                </span>
+              )}
             </button>
 
             {/* Inventory Checker */}
             <div>
               <button
                 onClick={() => toggleAccordion('acc-inventory')}
-                className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all text-left"
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all ${
+                  activeTab === 'inventory' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
+                }`}
               >
-                <span className="text-sm">ตรวจสอบคลังสินค้า</span>
-                <span className="text-xs">{inventoryAccordions['acc-inventory'] ? '▼' : '▶'}</span>
+                <div className="flex items-center gap-3 flex-1">
+                  <span className={`w-5 h-5 ${activeTab === 'inventory' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" /></svg>
+                  </span>
+                  <span className="text-[21px] tracking-wide">ตรวจสอบคลังสินค้า</span>
+                </div>
+                <span className="text-[18px] text-slate-400">{inventoryAccordions['acc-inventory'] ? '▼' : '▶'}</span>
               </button>
               {inventoryAccordions['acc-inventory'] && (
-                <div className="pl-8 pr-4 py-1 space-y-1">
+                <div className="pl-9 pr-4 py-1 space-y-1">
                   <button
                     onClick={() => {
                       setInvSubTab('sale');
                       setActiveTab('inventory');
+                      setSelectedInventoryOwner('');
                     }}
-                    className={`w-full text-left py-1 text-xs ${
-                      activeTab === 'inventory' && invSubTab === 'sale' ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-emerald-700'
+                    className={`w-full text-left py-1.5 px-2 rounded-lg text-[20px] transition-colors ${
+                      activeTab === 'inventory' && invSubTab === 'sale' ? 'text-emerald-700 font-bold bg-emerald-50/50' : 'text-slate-500 hover:text-emerald-700 hover:bg-slate-50'
                     }`}
                   >
                     คลังสต็อกของเซลล์
@@ -517,9 +990,10 @@ export default function AdminPage() {
                     onClick={() => {
                       setInvSubTab('pharm');
                       setActiveTab('inventory');
+                      setSelectedInventoryOwner('');
                     }}
-                    className={`w-full text-left py-1 text-xs ${
-                      activeTab === 'inventory' && invSubTab === 'pharm' ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-emerald-700'
+                    className={`w-full text-left py-1.5 px-2 rounded-lg text-[20px] transition-colors ${
+                      activeTab === 'inventory' && invSubTab === 'pharm' ? 'text-emerald-700 font-bold bg-emerald-50/50' : 'text-slate-500 hover:text-emerald-700 hover:bg-slate-50'
                     }`}
                   >
                     คลังฝากขายร้านยา
@@ -532,20 +1006,27 @@ export default function AdminPage() {
             <div>
               <button
                 onClick={() => toggleAccordion('acc-masters')}
-                className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-all text-left"
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all ${
+                  activeTab === 'masters' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
+                }`}
               >
-                <span className="text-sm">ตั้งค่า</span>
-                <span className="text-xs">{inventoryAccordions['acc-masters'] ? '▼' : '▶'}</span>
+                <div className="flex items-center gap-3 flex-1">
+                  <span className={`w-5 h-5 ${activeTab === 'masters' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
+                  </span>
+                  <span className="text-[21px] tracking-wide">ตั้งค่า</span>
+                </div>
+                <span className="text-[18px] text-slate-400">{inventoryAccordions['acc-masters'] ? '▼' : '▶'}</span>
               </button>
               {inventoryAccordions['acc-masters'] && (
-                <div className="pl-8 pr-4 py-1 space-y-1">
+                <div className="pl-9 pr-4 py-1 space-y-1">
                   <button
                     onClick={() => {
                       setMasterSubTab('products');
                       setActiveTab('masters');
                     }}
-                    className={`w-full text-left py-1 text-xs ${
-                      activeTab === 'masters' && masterSubTab === 'products' ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-emerald-700'
+                    className={`w-full text-left py-1.5 px-2 rounded-lg text-[20px] transition-colors ${
+                      activeTab === 'masters' && masterSubTab === 'products' ? 'text-emerald-700 font-bold bg-emerald-50/50' : 'text-slate-500 hover:text-emerald-700 hover:bg-slate-50'
                     }`}
                   >
                     ข้อมูลสินค้า
@@ -555,8 +1036,8 @@ export default function AdminPage() {
                       setMasterSubTab('stores');
                       setActiveTab('masters');
                     }}
-                    className={`w-full text-left py-1 text-xs ${
-                      activeTab === 'masters' && masterSubTab === 'stores' ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-emerald-700'
+                    className={`w-full text-left py-1.5 px-2 rounded-lg text-[20px] transition-colors ${
+                      activeTab === 'masters' && masterSubTab === 'stores' ? 'text-emerald-700 font-bold bg-emerald-50/50' : 'text-slate-500 hover:text-emerald-700 hover:bg-slate-50'
                     }`}
                   >
                     ข้อมูลร้านค้า
@@ -566,8 +1047,8 @@ export default function AdminPage() {
                       setMasterSubTab('users');
                       setActiveTab('masters');
                     }}
-                    className={`w-full text-left py-1 text-xs ${
-                      activeTab === 'masters' && masterSubTab === 'users' ? 'text-emerald-600 font-bold' : 'text-slate-500 hover:text-emerald-700'
+                    className={`w-full text-left py-1.5 px-2 rounded-lg text-[20px] transition-colors ${
+                      activeTab === 'masters' && masterSubTab === 'users' ? 'text-emerald-700 font-bold bg-emerald-50/50' : 'text-slate-500 hover:text-emerald-700 hover:bg-slate-50'
                     }`}
                   >
                     ข้อมูลผู้ใช้งาน
@@ -579,129 +1060,168 @@ export default function AdminPage() {
         </div>
 
         {/* User profile / Logout */}
-        <div className="p-4 border-t border-slate-100 flex flex-col gap-2">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs">
-              AD
+        <div className="p-4 mt-auto">
+          <div className="bg-slate-50 rounded-2xl p-4 flex flex-col gap-4 shadow-sm border border-slate-100/50">
+            <div className="flex flex-col gap-1 px-1">
+              <span className="text-[20px] text-slate-400 font-medium">เข้าใช้งานโดย</span>
+              <div className="font-bold text-[22px] text-slate-800">{user?.fullName || 'ผู้ดูแลระบบ'}</div>
             </div>
-            <div>
-              <div className="font-bold text-xs text-slate-800">{user?.fullName}</div>
-              <div className="text-[9px] text-slate-400 font-semibold">{user?.role}</div>
-            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full py-2.5 bg-white border border-slate-200 text-rose-500 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 rounded-xl text-[22px] font-bold transition-all shadow-sm flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+              </svg>
+              <span>ออกจากระบบ</span>
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            className="w-full mt-2 py-2 border border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 rounded-lg text-xs font-bold transition-all text-center"
-          >
-            ออกจากระบบ
-          </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden h-screen">
         {/* Top Header */}
-        <header className="bg-white border-b border-slate-200 h-16 shrink-0 flex items-center justify-between px-8">
-          <h2 className="font-bold text-slate-800 text-base">
-            {activeTab === 'dashboard' && 'Dashboard ภาพรวม'}
-            {activeTab === 'approvals' && 'ระบบการอนุมัติธุรกรรม'}
-            {activeTab === 'inventory' && `ตรวจสอบสต็อกคงเหลือ (${invSubTab === 'sale' ? 'คลังส่วนตัวเซลล์' : 'คลังฝากขายร้านยา'})`}
-            {activeTab === 'masters' && `จัดการข้อมูลระบบ (${masterSubTab === 'products' ? 'สินค้า' : masterSubTab === 'stores' ? 'ร้านค้า' : 'ผู้ใช้งาน'})`}
+        <header className="bg-white border-b border-slate-100 h-[72px] shrink-0 flex items-center justify-between px-8 sticky top-0 z-50">
+          <h2 className="font-bold text-slate-800 text-3xl">
+            {activeTab === 'dashboard' && 'Dashboard'}
+            {activeTab === 'approvals' && 'การอนุมัติเอกสารและตรวจสอบรายการ'}
+            {activeTab === 'inventory' && (invSubTab === 'sale' ? 'คลังสต็อกของเซลล์' : 'คลังฝากขายร้านยา')}
+            {activeTab === 'masters' && `ตั้งค่า > ${masterSubTab === 'products' ? 'ข้อมูลสินค้า' : masterSubTab === 'stores' ? 'ข้อมูลร้านค้า' : 'ข้อมูลผู้ใช้งาน'}`}
           </h2>
+          {/* User requested removal of update status here */}
         </header>
 
         {/* Scrollable Screen Content */}
         <div className="flex-1 overflow-y-auto p-8 space-y-6">
           {/* ==================== TAB 1: DASHBOARD ==================== */}
           {activeTab === 'dashboard' && stats && (
-            <div className="space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1">
-                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">รายการรออนุมัติ</span>
-                  <h3 className="text-3xl font-black text-amber-500">{stats.pendingCount} <span className="text-xs font-normal text-slate-400">ใบ</span></h3>
+            <div className="space-y-4">
+              
+              {/* Dashboard Filters Header */}
+              <div className="bg-white p-5 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-[24px]">ภาพรวมระบบ (Overview)</h3>
+                  <p className="text-[21px] text-slate-500 mt-1">สรุปข้อมูลสถิติการขายและสถานะต่างๆ</p>
                 </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1">
-                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">พนักงานขายที่ทำงานอยู่</span>
-                  <h3 className="text-3xl font-black text-indigo-600">{stats.activeSalesCount} <span className="text-xs font-normal text-slate-400">คน</span></h3>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1">
-                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">ยอดขายสินค้าฝากขายสะสม</span>
-                  <h3 className="text-3xl font-black text-emerald-600">฿{stats.totalSalesValue.toLocaleString()}</h3>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1">
-                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">ร้านค้าเครือข่ายฝากขาย</span>
-                  <h3 className="text-3xl font-black text-slate-700">{stats.totalStores} <span className="text-xs font-normal text-slate-400">ร้าน</span></h3>
+                
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[21px] text-slate-600">ตั้งแต่:</span>
+                    <input 
+                      type="date" 
+                      value={dashStartDate}
+                      onChange={(e) => setDashStartDate(e.target.value)}
+                      className="border border-slate-200 rounded-lg px-3 py-1.5 text-[21px] text-slate-700 bg-slate-50 w-32" 
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[21px] text-slate-600">ถึง:</span>
+                    <input 
+                      type="date" 
+                      value={dashEndDate}
+                      onChange={(e) => setDashEndDate(e.target.value)}
+                      className="border border-slate-200 rounded-lg px-3 py-1.5 text-[21px] text-slate-700 bg-slate-50 w-32" 
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 ml-2">
+                    <span className="text-[21px] text-slate-600">เซลล์:</span>
+                    <select 
+                      value={dashSaleUserId}
+                      onChange={(e) => setDashSaleUserId(e.target.value)}
+                      className="border border-slate-200 rounded-lg px-3 py-1.5 text-[21px] text-slate-700 bg-slate-50 w-40"
+                    >
+                      <option value="ยอดรวมทั้งหมด">ยอดรวมทั้งหมด</option>
+                      {users.filter(u => u.role === 'SALE').map((u) => (
+                        <option key={u.id} value={u.id}>{u.fullName}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              {/* Chart & Recent Activity */}
-              <div className="grid grid-cols-3 gap-6">
-                {/* SVG Chart */}
-                <div className="col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <h4 className="text-sm font-bold text-slate-700 mb-4">แนวโน้มยอดขายสัปดาห์นี้ (7 วันล่าสุด)</h4>
-                  {stats.chartData.length > 0 ? (
-                    <div>
-                      {/* Calculate SVG Polyline points */}
-                      {(() => {
-                        const maxValue = Math.max(...stats.chartData.map((d: any) => d.value), 1000);
-                        const points = stats.chartData.map((d: any, i: number) => {
-                          const x = 50 + (i * (430 / Math.max(stats.chartData.length - 1, 1)));
-                          const y = 170 - (d.value / maxValue) * 150;
-                          return `${x},${y}`;
-                        }).join(' ');
-
-                        return (
-                          <svg viewBox="0 0 500 200" className="w-full h-48">
-                            <line x1="50" y1="20" x2="480" y2="20" stroke="#f1f5f9" strokeWidth="1" />
-                            <line x1="50" y1="70" x2="480" y2="70" stroke="#f1f5f9" strokeWidth="1" />
-                            <line x1="50" y1="120" x2="480" y2="120" stroke="#f1f5f9" strokeWidth="1" />
-                            <line x1="50" y1="170" x2="480" y2="170" stroke="#cbd5e1" strokeWidth="1.5" />
-                            <polyline points={points} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                            {stats.chartData.map((d: any, i: number) => {
-                              const x = 50 + (i * (430 / Math.max(stats.chartData.length - 1, 1)));
-                              const y = 170 - (d.value / maxValue) * 150;
-                              return (
-                                <g key={i}>
-                                  <circle cx={x} cy={y} r="4" fill="#10b981" />
-                                  <text x={x} y={y - 8} fontSize="8" fontWeight="bold" fill="#047857" textAnchor="middle">
-                                    ฿{d.value}
-                                  </text>
-                                  <text x={x} y="185" fontSize="8" fill="#64748b" textAnchor="middle">
-                                    {d.date.substring(5)}
-                                  </text>
-                                </g>
-                              );
-                            })}
-                          </svg>
-                        );
-                      })()}
-                    </div>
-                  ) : (
-                    <div className="h-48 flex items-center justify-center text-slate-400 text-xs">ยังไม่มีข้อมูลยอดขายในสัปดาห์นี้</div>
-                  )}
+              {/* 4 Solid Color Cards */}
+              <div className="grid grid-cols-4 gap-4">
+                {/* 1. Green */}
+                <div className="bg-[#1a9f60] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[20px] font-semibold opacity-90">ยอดขายรวม</span>
+                    <h3 className="text-4xl font-bold">฿{(stats?.totalSalesValue || 0).toLocaleString()}</h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-2xl">💰</div>
+                </div>
+                
+                {/* 2. Blue */}
+                <div className="bg-[#3b82f6] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[20px] font-semibold opacity-90">สินค้าที่ขายได้</span>
+                    <h3 className="text-4xl font-bold">{(stats?.totalSoldItems || 0).toLocaleString()} <span className="text-[21px] font-normal">ชิ้น</span></h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-2xl">📦</div>
                 </div>
 
-                {/* Recent Transactions */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-700 mb-4">ประวัติรายการล่าสุด</h4>
-                    <div className="space-y-3">
-                      {recentTxns.map((t: any) => (
-                        <div key={t.id} className="flex items-center justify-between border-b border-slate-50 pb-2">
-                          <div>
-                            <div className="font-bold text-xs text-slate-800">{t.docNo}</div>
-                            <div className="text-[10px] text-slate-400">{t.creatorName} ({t.docType})</div>
-                          </div>
-                          <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
-                            t.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
-                            t.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
-                            t.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'
-                          }`}>{t.status}</span>
-                        </div>
-                      ))}
-                    </div>
+                {/* 3. Purple */}
+                <div className="bg-[#6366f1] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[20px] font-semibold opacity-90">จำนวนรายการขาย</span>
+                    <h3 className="text-4xl font-bold">{(stats?.approvedSalesCount || 0).toLocaleString()} <span className="text-[21px] font-normal">บิล</span></h3>
                   </div>
+                  <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-2xl">📄</div>
+                </div>
+
+                {/* 4. Orange */}
+                <div className="bg-[#f59e0b] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[20px] font-semibold opacity-90">สินค้ายอดนิยม</span>
+                    <h3 className="text-4xl font-bold">{stats?.topProduct || '-'}</h3>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-2xl">⭐</div>
+                </div>
+              </div>
+
+              {/* Recent Transactions Table */}
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
+                  <h3 className="font-bold text-slate-800 text-[23px]">รายการขายล่าสุด (Approved Sales)</h3>
+                  <button className="text-emerald-600 text-[21px] font-bold hover:text-emerald-700">ดูทั้งหมด ➞</button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-[19px] text-slate-500 font-semibold">
+                        <th className="py-3 px-4 w-16 text-center">No.</th>
+                        <th className="py-3 px-4 whitespace-nowrap">Doc No.</th>
+                        <th className="py-3 px-4 w-48">เซลล์ผู้ดูแล</th>
+                        <th className="py-3 px-4">ปลายทาง (ร้านยา)</th>
+                        <th className="py-3 px-4 w-32">วันที่ทำรายการ</th>
+                        <th className="py-3 px-4 w-32 text-right">ราคารวม (บาท)</th>
+                        <th className="py-3 px-4 w-32 text-center">ดูรายละเอียด</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentTxns.length > 0 ? (
+                        recentTxns.map((t: any, index: number) => (
+                          <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors text-[20px] text-slate-700">
+                            <td className="py-3 px-4 text-center text-slate-500">{index + 1}</td>
+                            <td className="py-3 px-4 font-medium text-slate-900 whitespace-nowrap">{t.docNo}</td>
+                            <td className="py-3 px-4">{t.creatorName}</td>
+                            <td className="py-3 px-4">{t.storeName || '-'}</td>
+                            <td className="py-3 px-4 text-slate-500">{new Date(t.createdAt).toLocaleDateString('th-TH')}</td>
+                            <td className="py-3 px-4 text-right font-semibold text-emerald-600">
+                              {Number(t.totalValue || 0) > 0 ? `฿${Number(t.totalValue).toLocaleString()}` : '-'}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <button className="text-emerald-600 hover:text-emerald-700 hover:underline font-medium">รายละเอียด</button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={7} className="py-12 text-center text-slate-400 text-[21px]">กำลังโหลด...</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -709,144 +1229,228 @@ export default function AdminPage() {
 
           {/* ==================== TAB 2: APPROVALS ==================== */}
           {activeTab === 'approvals' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <h3 className="text-sm font-bold text-slate-700 mb-4">รายการเอกสารรอการอนุมัติสต็อก</h3>
+            <div className="space-y-4">
+              {/* Approvals Action Bar & Table Container */}
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                {/* Action Bar */}
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[21px] text-slate-600">ตัวกรองสถานะ:</span>
+                    <select 
+                      className="border-2 border-emerald-500 rounded-md px-3 py-1.5 text-[21px] text-slate-700 bg-white w-56 focus:outline-none focus:ring-0"
+                      value={approvalFilterStatus}
+                      onChange={(e) => setApprovalFilterStatus(e.target.value)}
+                    >
+                      <option value="ALL">ทั้งหมด</option>
+                      <option value="PENDING">เฉพาะรออนุมัติ (Pending)</option>
+                      <option value="APPROVED">อนุมัติแล้ว (Approved)</option>
+                      <option value="REJECTED">ยกเลิกแล้ว (Canceled)</option>
+                    </select>
+
+                    {selectedApprovals.length > 0 && (
+                      <button 
+                        onClick={handleBulkApproveClick}
+                        disabled={isApproving}
+                        className="ml-2 flex items-center gap-2 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors shadow-sm disabled:opacity-50 text-[20px]"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                        </svg>
+                        {isApproving ? 'กำลังอนุมัติ...' : `อนุมัติที่เลือก (${selectedApprovals.length})`}
+                      </button>
+                    )}
+                  </div>
+                  <div className="w-80">
+                    <input 
+                      type="text" 
+                      placeholder="ค้นหา เลขที่เอกสาร, ชื่อเซลล์ หรือชื่อร้านค้า..." 
+                      className="w-full border border-slate-200 rounded-md px-3 py-1.5 text-[21px] text-slate-700 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none transition-all"
+                      value={approvalSearchText}
+                      onChange={(e) => setApprovalSearchText(e.target.value)}
+                    />
+                  </div>
+                </div>
+                
+                {/* Table */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
+                  <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-400 uppercase tracking-wider font-bold border-b border-slate-100">
-                        <th className="p-3">เลขที่เอกสาร</th>
-                        <th className="p-3">ประเภท</th>
-                        <th className="p-3">ผู้ทำรายการ</th>
-                        <th className="p-3">ร้านค้า</th>
-                        <th className="p-3">วันที่ส่งรายการ</th>
-                        <th className="p-3 text-center">จัดการ</th>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-[20px] text-slate-500 font-semibold">
+                        <th className="py-4 px-4 w-12 text-center">
+                          <input 
+                            type="checkbox" 
+                            className="rounded border-slate-300 w-4 h-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                            checked={selectedApprovals.length > 0 && selectedApprovals.length === allTxns.filter((t: any) => t.status === 'PENDING').length}
+                            onChange={handleSelectAllApprovals}
+                          />
+                        </th>
+                        <th className="py-4 px-4 w-16 text-center">No.</th>
+                        <th className="py-4 px-4 text-center whitespace-nowrap">Doc No.</th>
+                        <th className="py-4 px-4 text-center">ประเภท</th>
+                        <th className="py-4 px-4 text-center">เซลล์ผู้สร้างเอกสาร</th>
+                        <th className="py-4 px-4 text-center">ปลายทาง (เซลล์/ร้านยา)</th>
+                        <th className="py-4 px-4 text-center whitespace-nowrap">วันที่ทำรายการ</th>
+                        <th className="py-4 px-4 text-center">สถานะ</th>
+                        <th className="py-4 px-4 text-center">จัดการ</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {pendingTxns.length > 0 ? (
-                        pendingTxns.map((t: any) => (
-                          <tr key={t.id} className="hover:bg-slate-50/50">
-                            <td className="p-3 font-bold text-slate-800">{t.docNo}</td>
-                            <td className="p-3 font-semibold text-slate-600">{t.docType} {t.returnSubtype ? `(${t.returnSubtype})` : ''}</td>
-                            <td className="p-3 text-slate-600">{t.creatorName}</td>
-                            <td className="p-3 text-slate-600">{t.storeName || '-'}</td>
-                            <td className="p-3 text-slate-400">{new Date(t.createdAt).toLocaleString('th-TH')}</td>
-                            <td className="p-3 text-center">
+                    <tbody>
+                      {filteredApprovals.length > 0 ? (
+                        (() => {
+                          const paginatedApprovals = filteredApprovals.slice((approvalPage - 1) * approvalPageSize, approvalPage * approvalPageSize);
+                          return paginatedApprovals.map((t: any, index: number) => (
+                          <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors text-[20px] text-slate-700">
+                            <td className="py-3 px-4 text-center">
+                              {t.status === 'PENDING' ? (
+                                <input 
+                                  type="checkbox" 
+                                  className="rounded border-slate-300 w-4 h-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                  checked={selectedApprovals.includes(t.docNo)}
+                                  onChange={() => handleSelectApproval(t.docNo)}
+                                />
+                              ) : (
+                                <input type="checkbox" checked={false} readOnly disabled className="rounded border-slate-200 w-4 h-4 opacity-30 cursor-not-allowed" />
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center text-slate-500">{(approvalPage - 1) * approvalPageSize + index + 1}</td>
+                            <td className="py-3 px-4 text-center font-medium text-slate-900 whitespace-nowrap">{t.docNo}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-[18px] font-medium">{getDocTypeThai(t.docType, t.returnSubtype)}</span>
+                            </td>
+                            <td className="py-3 px-4 text-center">{t.creatorName}</td>
+                            <td className="py-3 px-4 text-center">{t.storeName || '-'}</td>
+                            <td className="py-3 px-4 text-center text-slate-500 whitespace-nowrap">{t.createdAt.substring(0, 10)}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`text-[18px] px-3 py-1 rounded-full font-bold shadow-sm ${
+                                t.status === 'PENDING' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                t.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                                t.status === 'REJECTED' ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              }`}>{t.status}</span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
                               <button
                                 onClick={() => handleViewTxnDetails(t.docNo)}
-                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold transition-all text-[11px]"
+                                className="text-emerald-600 hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors font-semibold"
                               >
-                                ตรวจสอบและอนุมัติ
+                                รายละเอียด
                               </button>
                             </td>
                           </tr>
                         ))
+                        })()
                       ) : (
                         <tr>
-                          <td colSpan={6} className="p-6 text-center text-slate-400">🎉 ไม่มีรายการค้างรออนุมัติในระบบ</td>
+                          <td colSpan={8} className="py-12 text-center text-slate-400 text-[21px]">ไม่พบรายการที่ตรงกับเงื่อนไข</td>
                         </tr>
                       )}
                     </tbody>
                   </table>
                 </div>
-              </div>
 
-              {/* All Transactions Log */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <h3 className="text-sm font-bold text-slate-700 mb-4">บันทึกธุรกรรมทั้งหมดในระบบ</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 text-slate-400 uppercase tracking-wider font-bold border-b border-slate-100">
-                        <th className="p-3">เลขที่เอกสาร</th>
-                        <th className="p-3">ประเภท</th>
-                        <th className="p-3">ผู้ส่ง</th>
-                        <th className="p-3">ร้านค้า</th>
-                        <th className="p-3">สถานะ</th>
-                        <th className="p-3">วันที่ทำรายการ</th>
-                        <th className="p-3 text-center">ดูข้อมูล</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {allTxns.map((t: any) => (
-                        <tr key={t.id} className="hover:bg-slate-50/50">
-                          <td className="p-3 font-bold text-slate-800">{t.docNo}</td>
-                          <td className="p-3 text-slate-600">{t.docType}</td>
-                          <td className="p-3 text-slate-600">{t.creatorName}</td>
-                          <td className="p-3 text-slate-600">{t.storeName || '-'}</td>
-                          <td className="p-3">
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                              t.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
-                              t.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
-                              t.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'
-                            }`}>{t.status}</span>
-                          </td>
-                          <td className="p-3 text-slate-400">{new Date(t.createdAt).toLocaleString('th-TH')}</td>
-                          <td className="p-3 text-center">
-                            <button
-                              onClick={() => handleViewTxnDetails(t.docNo)}
-                              className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg font-semibold transition-all text-[11px]"
-                            >
-                              ดูรายละเอียด
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <PaginationControls 
+                  currentPage={approvalPage} 
+                  totalPages={Math.ceil(filteredApprovals.length / approvalPageSize) || 1} 
+                  onPageChange={setApprovalPage} 
+                  pageSize={approvalPageSize} 
+                  onPageSizeChange={setApprovalPageSize} 
+                  totalItems={filteredApprovals.length} 
+                />
               </div>
             </div>
           )}
 
           {/* ==================== TAB 3: INVENTORY ==================== */}
           {activeTab === 'inventory' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <h3 className="text-sm font-bold text-slate-700 mb-4">
-                  {invSubTab === 'sale' ? 'สต็อกสินค้าคงเหลือส่วนตัวของพนักงานขาย (Sale In-hand Stock)' : 'สต็อกสินค้าฝากขายในตู้ร้านขายยา (Pharmacy Consigned Stock)'}
-                </h3>
+            <div className="space-y-4">
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                {/* Action Bar */}
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[21px] text-slate-600">{invSubTab === 'sale' ? 'เลือกเซลล์:' : 'เลือกร้านค้า:'}</span>
+                    <select 
+                      className="border-2 border-emerald-500 rounded-md px-3 py-1.5 text-[21px] text-slate-700 bg-white w-64 focus:outline-none focus:ring-0"
+                      value={selectedInventoryOwner}
+                      onChange={(e) => setSelectedInventoryOwner(e.target.value)}
+                    >
+                      <option value="">พิมพ์ชื่อเพื่อค้นหา...</option>
+                      {invSubTab === 'sale' ? (
+                        users.filter((u: any) => u.role === 'SALE').map((u: any) => (
+                          <option key={u.id} value={u.id}>{u.code} - {u.fullName}</option>
+                        ))
+                      ) : (
+                        stores.map((s: any) => (
+                          <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-64">
+                      <input 
+                        type="text" 
+                        placeholder="ค้นหา รหัสสินค้า, ชื่อสินค้า..." 
+                        className="w-full border border-slate-200 rounded-md px-3 py-1.5 text-[21px] text-slate-700 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none transition-all"
+                      />
+                    </div>
+                    <button className="px-4 py-1.5 border border-amber-500 text-amber-600 hover:bg-amber-50 rounded-md text-[21px] font-bold transition-all">
+                      Export (.xlsx)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Table */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
+                  <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-400 uppercase tracking-wider font-bold border-b border-slate-100">
-                        <th className="p-3">{invSubTab === 'sale' ? 'รหัส/ชื่อเซลล์' : 'รหัส/ชื่อร้านค้า'}</th>
-                        <th className="p-3">รหัสสินค้า (SKU)</th>
-                        <th className="p-3">ชื่อสินค้า</th>
-                        <th className="p-3">ราคาสินค้า</th>
-                        <th className="p-3 text-right">จำนวนสต็อกคงเหลือ</th>
-                        <th className="p-3 text-right">มูลค่ารวม</th>
-                        <th className="p-3 text-center">อัปเดตล่าสุด</th>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-[20px] text-slate-500 font-semibold">
+                        <th className="py-3 px-4 w-16 text-center">No.</th>
+                        <th className="py-3 px-4 text-center">{invSubTab === 'sale' ? 'พนักงานขาย' : 'ร้านยา (Pharmacy)'}</th>
+                        <th className="py-3 px-4 text-center">รหัสสินค้า (SKU)</th>
+                        <th className="py-3 px-4 text-center">ชื่อสินค้า</th>
+                        <th className="py-3 px-4 text-center">จำนวนคงเหลือ</th>
+                        <th className="py-3 px-4 text-center">วันที่เริ่ม</th>
+                        <th className="py-3 px-4 text-center">วันที่สิ้นสุด</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {inventoryList
-                        .filter((inv) => inv.locationType === (invSubTab === 'sale' ? 'SALE' : 'PHARMACY'))
-                        .map((inv: any) => {
-                          const prd = products.find((p) => p.id === inv.productId);
-                          let ownerName = '-';
-                          if (invSubTab === 'sale') {
-                            const usr = users.find((u) => u.id === inv.saleUserId);
-                            ownerName = usr ? `${usr.code} - ${usr.fullName}` : '-';
-                          } else {
-                            const st = stores.find((s) => s.id === inv.storeId);
-                            ownerName = st ? `${st.code} - ${st.name}` : '-';
-                          }
+                    <tbody>
+                      {!selectedInventoryOwner ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-slate-400 text-[21px]">
+                            {invSubTab === 'sale' ? 'กรุณาเลือกพนักงานขายเพื่อดูสต็อก' : 'กรุณาเลือกร้านยาเพื่อดูสต็อกฝากขาย'}
+                          </td>
+                        </tr>
+                      ) : inventoryList.filter((inv) => inv.locationType === (invSubTab === 'sale' ? 'SALE' : 'PHARMACY') && (invSubTab === 'sale' ? inv.saleUserId === selectedInventoryOwner && inv.quantity > 0 : inv.storeId === selectedInventoryOwner)).length > 0 ? (
+                        inventoryList
+                          .filter((inv) => inv.locationType === (invSubTab === 'sale' ? 'SALE' : 'PHARMACY') && (invSubTab === 'sale' ? inv.saleUserId === selectedInventoryOwner && inv.quantity > 0 : inv.storeId === selectedInventoryOwner))
+                          .map((inv: any, index: number) => {
+                            const prd = products.find((p) => p.id === inv.productId);
+                            let ownerName = '-';
+                            if (invSubTab === 'sale') {
+                              const usr = users.find((u) => u.id === inv.saleUserId);
+                              ownerName = usr ? `${usr.fullName}` : '-';
+                            } else {
+                              const st = stores.find((s) => s.id === inv.storeId);
+                              ownerName = st ? `${st.code} - ${st.name}` : '-';
+                            }
 
-                          return (
-                            <tr key={inv.id} className="hover:bg-slate-50/50">
-                              <td className="p-3 font-bold text-slate-800">{ownerName}</td>
-                              <td className="p-3 text-slate-600 font-semibold">{prd?.sku || '-'}</td>
-                              <td className="p-3 text-slate-600">{prd?.name || '-'}</td>
-                              <td className="p-3 text-slate-600">฿{Number(prd?.price || 0).toLocaleString()}</td>
-                              <td className="p-3 text-right font-black text-slate-800">{inv.quantity} ชิ้น</td>
-                              <td className="p-3 text-right font-black text-emerald-600">฿{(inv.quantity * Number(prd?.price || 0)).toLocaleString()}</td>
-                              <td className="p-3 text-center text-slate-400">{new Date(inv.updatedAt).toLocaleString('th-TH')}</td>
-                            </tr>
-                          );
-                        })}
+                            return (
+                              <tr key={inv.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors text-[21px] text-slate-700">
+                                <td className="py-3 px-4 text-center">{ownerName}</td>
+                                <td className="py-3 px-4 text-center">{prd?.sku || '-'}</td>
+                                <td className="py-3 px-4 text-center">{prd?.name || '-'}</td>
+                                <td className="py-3 px-4 text-center font-bold">{inv.quantity}</td>
+                                <td className="py-3 px-4 text-center text-slate-400">{formatDateOnly(prd?.startDate)}</td>
+                                <td className="py-3 px-4 text-center text-slate-400">{formatDateOnly(prd?.endDate)}</td>
+                              </tr>
+                            );
+                          })
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-slate-400 text-[21px]">
+                            ไม่มีข้อมูลสต็อก
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -861,133 +1465,232 @@ export default function AdminPage() {
               {masterSubTab === 'products' && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-sm font-bold text-slate-700">ฐานข้อมูลรายการสินค้าคงคลัง</h3>
-                    <button
+                    <h3 className="text-[21px] font-bold text-slate-700">ฐานข้อมูลรายการสินค้าคงคลัง</h3>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleDownloadTemplate('products')} className="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-[20px] font-bold transition-all whitespace-nowrap">
+                        ดาวน์โหลด Template
+                      </button>
+
+                      <button onClick={() => handleExportData('products')} className="px-3 py-1.5 border border-amber-500 text-amber-600 hover:bg-amber-50 rounded-lg text-[20px] font-bold transition-all whitespace-nowrap">
+                        Export (.xlsx)
+                      </button>
+                      <button onClick={() => { setImportType('products'); fileInputRef.current?.click(); }} className="px-3 py-1.5 border border-blue-500 text-blue-600 hover:bg-blue-50 rounded-lg text-[20px] font-bold transition-all whitespace-nowrap">
+                        Import (.xlsx)
+                      </button>
+                      <button
                       onClick={() => {
                         setEditingProduct(null);
                         setProductForm({ sku: '', name: '', price: 0, startDate: '', endDate: '', status: 'ACTIVE' });
                         setShowProductModal(true);
                       }}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all text-xs flex items-center gap-1.5"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all text-[21px] flex items-center gap-1.5"
                     >
                       <span>+ เพิ่มสินค้าใหม่</span>
-                    </button>
+                      </button>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                    <table className="w-full text-left text-[21px] border-collapse">
                       <thead>
                         <tr className="bg-slate-50 text-slate-400 uppercase tracking-wider font-bold border-b border-slate-100">
+                            <th className="p-3 w-16 text-center">No.</th>
                           <th className="p-3">รหัสสินค้า</th>
                           <th className="p-3">SKU</th>
                           <th className="p-3">ชื่อสินค้า</th>
                           <th className="p-3">ราคา</th>
-                          <th className="p-3">วันเริ่มสัญญา</th>
-                          <th className="p-3">วันสิ้นสุดสัญญา</th>
+                          <th className="p-3">วันที่เริ่มต้น</th>
+                          <th className="p-3">วันที่สิ้นสุด</th>
                           <th className="p-3">สถานะ</th>
+                          <th className="p-3">แก้ไขล่าสุด (โดย)</th>
                           <th className="p-3 text-center">จัดการ</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {products.map((p: any) => (
+                        {(() => {
+                          const totalProductPages = Math.ceil(products.length / productPageSize);
+                          const paginatedProducts = products.slice((productPage - 1) * productPageSize, productPage * productPageSize);
+                          return paginatedProducts.length > 0 ? (
+                            paginatedProducts.map((p: any, index: number) => (
                           <tr key={p.id} className="hover:bg-slate-50/50">
+                            <td className="p-3 text-center text-slate-500">{(productPage - 1) * productPageSize + index + 1}</td>
                             <td className="p-3 font-bold text-slate-800">{p.code}</td>
                             <td className="p-3 text-slate-600 font-semibold">{p.sku}</td>
                             <td className="p-3 text-slate-600">{p.name}</td>
-                            <td className="p-3 font-bold text-emerald-600">฿{Number(p.price).toLocaleString()}</td>
-                            <td className="p-3 text-slate-500">{p.startDate || '-'}</td>
-                            <td className="p-3 text-slate-500">{p.endDate || '-'}</td>
+                            <td className="p-3 font-bold text-emerald-600">฿{Number(p.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="p-3 text-slate-500">{formatDateOnly(p.startDate)}</td>
+                            <td className="p-3 text-slate-500">{formatDateOnly(p.endDate)}</td>
+                            
                             <td className="p-3">
-                              <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
-                                p.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
-                              }`}>{p.status}</span>
+                              <button
+                                onClick={() => handleToggleProductStatus(p)}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                  p.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-300'
+                                }`}
+                              >
+                                <span
+                                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                    p.status === 'ACTIVE' ? 'translate-x-4.5' : 'translate-x-1'
+                                  }`}
+                                  style={{ transform: p.status === 'ACTIVE' ? 'translateX(18px)' : 'translateX(4px)' }}
+                                />
+                              </button>
+                            </td>
+                            <td className="p-3 text-lg text-slate-500">
+                              <div className="flex flex-col">
+                                <div className="text-[19px] font-semibold text-slate-700">{p.updatedByFullName || '-'}</div>
+                                <div className="text-[18px] text-slate-400 mt-0.5">{formatDate(p.updatedAt || new Date())}</div>
+                              </div>
                             </td>
                             <td className="p-3 text-center flex items-center justify-center gap-2">
+
                               <button
                                 onClick={() => handleEditProduct(p)}
-                                className="px-2 py-1 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-[10px]"
+                                className="px-2 py-1 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-[18px]"
                               >
                                 แก้ไข
                               </button>
-                              <button
-                                onClick={() => handleToggleProductStatus(p)}
-                                className={`px-2 py-1 rounded-lg text-[10px] ${
-                                  p.status === 'ACTIVE' ? 'border border-rose-200 hover:bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-700'
-                                }`}
-                              >
-                                {p.status === 'ACTIVE' ? 'ปิดการใช้งาน' : 'เปิดการใช้งาน'}
-                              </button>
+                              
                             </td>
                           </tr>
-                        ))}
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={9} className="py-12 text-center text-slate-400 text-[21px]">ไม่พบรายการสินค้า</td>
+                            </tr>
+                          );
+                        })()}
                       </tbody>
                     </table>
                   </div>
+                  
+                  <PaginationControls 
+                    currentPage={productPage} 
+                    totalPages={Math.ceil(products.length / productPageSize) || 1} 
+                    onPageChange={setProductPage} 
+                    pageSize={productPageSize} 
+                    onPageSizeChange={setProductPageSize} 
+                    totalItems={products.length} 
+                  />
                 </div>
               )}
 
               {/* SUBTAB: STORES */}
               {masterSubTab === 'stores' && (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-sm font-bold text-slate-700">ฐานข้อมูลร้านขายยาเครือข่ายฝากขาย</h3>
-                    <button
-                      onClick={() => {
-                        setEditingStore(null);
-                        setStoreForm({ name: '', location: '', assignedUserId: '' });
-                        setShowStoreModal(true);
-                      }}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all text-xs flex items-center gap-1.5"
-                    >
-                      <span>+ เพิ่มร้านค้าใหม่</span>
-                    </button>
+                <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
+                    <div className="w-80">
+                      <input 
+                        type="text" 
+                        placeholder="ค้นหา ร้านค้า..." 
+                        className="w-full border border-slate-200 rounded-md px-3 py-1.5 text-[21px] text-slate-700 bg-slate-50 focus:bg-white focus:border-emerald-500 outline-none transition-all"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handleDownloadTemplate('stores')} className="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-md text-[21px] font-bold transition-all whitespace-nowrap">
+                    ดาวน์โหลด Template
+                  </button>
+
+                      <button onClick={() => handleExportData('stores')} className="px-3 py-1.5 border border-amber-500 text-amber-600 hover:bg-amber-50 rounded-lg text-[20px] font-bold transition-all whitespace-nowrap">
+                        Export (.xlsx)
+                      </button>
+                  <button onClick={() => { setImportType('stores'); fileInputRef.current?.click(); }} className="px-3 py-1.5 border border-blue-500 text-blue-600 hover:bg-blue-50 rounded-md text-[21px] font-bold transition-all whitespace-nowrap">
+                    Import (.xlsx)
+                  </button>
+                      <button
+                        onClick={() => {
+                          setEditingStore(null);
+                          setStoreForm({ name: '', location: '', province: '', storageLocation: '', phone: '', assignedUserId: '' });
+                          setShowStoreModal(true);
+                        }}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[21px] font-bold transition-all flex items-center gap-1.5"
+                      >
+                        <span>+ เพิ่มร้านค้าใหม่</span>
+                      </button>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                    <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="bg-slate-50 text-slate-400 uppercase tracking-wider font-bold border-b border-slate-100">
-                          <th className="p-3">รหัสร้าน</th>
+                        <tr className="bg-slate-50 border-b border-slate-100 text-[20px] text-slate-500 font-semibold">
+                            <th className="p-3 w-16 text-center">No.</th>
+                          <th className="p-3">รหัสร้านค้า</th>
                           <th className="p-3">ชื่อร้านค้า</th>
-                          <th className="p-3">ที่ตั้ง/แผนที่</th>
-                          <th className="p-3">เซลล์ที่ดูแล</th>
+                          <th className="p-3">ที่อยู่</th>
+                          <th className="p-3">จังหวัด</th>
+                          <th className="p-3">ตำแหน่งเก็บ</th>
+                          <th className="p-3">เบอร์โทรศัพท์</th>
+                          <th className="p-3">เซลล์ผู้รับผิดชอบ</th>
+                          <th className="p-3">สถานะ</th>
+                          <th className="p-3">แก้ไขล่าสุด (โดย)</th>
                           <th className="p-3 text-center">จัดการ</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {stores.map((s: any) => (
-                          <tr key={s.id} className="hover:bg-slate-50/50">
-                            <td className="p-3 font-bold text-slate-800">{s.code}</td>
-                            <td className="p-3 text-slate-600 font-semibold">{s.name}</td>
-                            <td className="p-3 text-slate-500">{s.location || '-'}</td>
-                            <td className="p-3 font-bold text-emerald-700">{s.assignedUserFullName || '⚠️ ยังไม่มีผู้ดูแล'}</td>
-                            <td className="p-3 text-center flex items-center justify-center gap-2">
+                      <tbody>
+                        {(() => {
+                          const totalStorePages = Math.ceil(stores.length / storePageSize);
+                          const paginatedStores = stores.slice((storePage - 1) * storePageSize, storePage * storePageSize);
+                          return paginatedStores.length > 0 ? (
+                            paginatedStores.map((s: any, index: number) => (
+                          <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors text-[21px] text-slate-700">
+                            <td className="p-3 text-center text-slate-500">{(storePage - 1) * storePageSize + index + 1}</td>
+                            <td className="p-3">{s.code}</td>
+                            <td className="p-3">{s.name}</td>
+                            <td className="p-3">{s.location || '-'}</td>
+                            <td className="p-3">{s.province || '-'}</td>
+                            <td className="p-3">{s.storageLocation || '-'}</td>
+                            <td className="p-3">{s.phone || '-'}</td>
+                            <td className="p-3">{s.assignedUserFullName || <span className="text-amber-500 font-semibold">⚠️ ยังไม่มีผู้ดูแล</span>}</td>
+                            
+                            <td className="p-3">
+                              <button
+                                onClick={() => handleToggleStoreStatus(s)}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                  s.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-300'
+                                }`}
+                              >
+                                <span
+                                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                    s.status === 'ACTIVE' ? 'translate-x-4.5' : 'translate-x-1'
+                                  }`}
+                                  style={{ transform: s.status === 'ACTIVE' ? 'translateX(18px)' : 'translateX(4px)' }}
+                                />
+                              </button>
+                            </td>
+                            <td className="p-3 text-lg text-slate-500">
+                              <div className="flex flex-col">
+                                <div className="text-[19px] font-semibold text-slate-700">{s.updatedByFullName || '-'}</div>
+                                <div className="text-[18px] text-slate-400 mt-0.5">{formatDate(s.updatedAt || new Date())}</div>
+                              </div>
+                            </td>
+
+                            <td className="p-3">
                               <button
                                 onClick={() => handleEditStore(s)}
-                                className="px-2 py-1 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-[10px]"
+                                className="text-emerald-600 hover:underline font-semibold"
                               >
-                                แก้ไข
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setTransferStoreId(s.id);
-                                  setTransferTargetUserId(s.assignedUserId || '');
-                                  setShowTransferModal(true);
-                                }}
-                                className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-[10px]"
-                              >
-                                โอนย้ายเซลล์
-                              </button>
-                              <button
-                                onClick={() => handleDeleteStore(s.id)}
-                                className="px-2 py-1 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-lg text-[10px]"
-                              >
-                                ลบ
+                                แก้ไข / โอนย้าย
                               </button>
                             </td>
                           </tr>
-                        ))}
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={9} className="py-12 text-center text-slate-400 text-[21px]">ไม่พบรายการร้านค้า</td>
+                            </tr>
+                          );
+                        })()}
                       </tbody>
                     </table>
                   </div>
+                  
+                  <PaginationControls 
+                    currentPage={storePage} 
+                    totalPages={Math.ceil(stores.length / storePageSize) || 1} 
+                    onPageChange={setStorePage} 
+                    pageSize={storePageSize} 
+                    onPageSizeChange={setStorePageSize} 
+                    totalItems={stores.length} 
+                  />
                 </div>
               )}
 
@@ -995,68 +1698,104 @@ export default function AdminPage() {
               {masterSubTab === 'users' && (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-sm font-bold text-slate-700">ฐานข้อมูลพนักงานและผู้ใช้งานระบบ</h3>
-                    <button
+                    <h3 className="text-[21px] font-bold text-slate-700">ฐานข้อมูลพนักงานและผู้ใช้งานระบบ</h3>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleDownloadTemplate('users')} className="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-[20px] font-bold transition-all whitespace-nowrap">
+                        ดาวน์โหลด Template
+                      </button>
+
+                      <button onClick={() => handleExportData('users')} className="px-3 py-1.5 border border-amber-500 text-amber-600 hover:bg-amber-50 rounded-lg text-[20px] font-bold transition-all whitespace-nowrap">
+                        Export (.xlsx)
+                      </button>
+                      <button onClick={() => { setImportType('users'); fileInputRef.current?.click(); }} className="px-3 py-1.5 border border-blue-500 text-blue-600 hover:bg-blue-50 rounded-lg text-[20px] font-bold transition-all whitespace-nowrap">
+                        Import (.xlsx)
+                      </button>
+                      <button
                       onClick={() => {
                         setEditingUser(null);
-                        setUserForm({ username: '', password: '', fullName: '', role: 'SALE', status: 'ACTIVE' });
+                        setUserForm({ code: '', username: '', password: '', fullName: '', role: 'SALE', status: 'ACTIVE' });
                         setShowUserModal(true);
                       }}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all text-xs flex items-center gap-1.5"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all text-[21px] flex items-center gap-1.5"
                     >
                       <span>+ เพิ่มผู้ใช้งานใหม่</span>
-                    </button>
+                      </button>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                    <table className="w-full text-left text-[21px] border-collapse">
                       <thead>
                         <tr className="bg-slate-50 text-slate-400 uppercase tracking-wider font-bold border-b border-slate-100">
+                            <th className="p-3 w-16 text-center">No.</th>
                           <th className="p-3">รหัสพนักงาน</th>
                           <th className="p-3">ชื่อผู้ใช้ (Username)</th>
                           <th className="p-3">ชื่อ-นามสกุล</th>
                           <th className="p-3">ตำแหน่ง (Role)</th>
                           <th className="p-3">สถานะ</th>
+                          <th className="p-3">แก้ไขล่าสุด (โดย)</th>
                           <th className="p-3 text-center">จัดการ</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {users.map((u: any) => (
+                        {(() => {
+                          const totalUserPages = Math.ceil(users.length / userPageSize);
+                          const paginatedUsers = users.slice((userPage - 1) * userPageSize, userPage * userPageSize);
+                          return paginatedUsers.map((u: any, index: number) => (
                           <tr key={u.id} className="hover:bg-slate-50/50">
+                            <td className="p-3 text-center text-slate-500">{(userPage - 1) * userPageSize + index + 1}</td>
                             <td className="p-3 font-bold text-slate-800">{u.code}</td>
                             <td className="p-3 text-slate-600 font-semibold">{u.username}</td>
                             <td className="p-3 text-slate-600">{u.fullName}</td>
                             <td className="p-3">
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              <span className={`text-[18px] px-2 py-0.5 rounded-full font-bold ${
                                 u.role === 'SYSTEM_ADMIN' ? 'bg-purple-100 text-purple-700' :
                                 u.role === 'ADMIN' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
                               }`}>{u.role}</span>
                             </td>
                             <td className="p-3">
-                              <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
-                                u.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
-                              }`}>{u.status}</span>
+                              <button
+                                onClick={() => handleToggleUserStatus(u)}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                  u.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-300'
+                                }`}
+                              >
+                                <span
+                                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                                    u.status === 'ACTIVE' ? 'translate-x-4.5' : 'translate-x-1'
+                                  }`}
+                                  style={{ transform: u.status === 'ACTIVE' ? 'translateX(18px)' : 'translateX(4px)' }}
+                                />
+                              </button>
                             </td>
-                            <td className="p-3 text-center flex items-center justify-center gap-2">
+                            <td className="p-3">
+                              <div className="flex flex-col">
+                                <div className="text-[19px] font-semibold text-slate-700">{u.updatedByFullName || '-'}</div>
+                                <div className="text-[18px] text-slate-400 mt-0.5">{formatDate(u.updatedAt || new Date())}</div>
+                              </div>
+                            </td>
+                            <td className="p-3 text-center">
                               <button
                                 onClick={() => handleEditUser(u)}
-                                className="px-2 py-1 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-[10px]"
+                                className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-[18px] font-semibold transition-colors"
                               >
                                 แก้ไข
                               </button>
-                              <button
-                                onClick={() => handleToggleUserStatus(u)}
-                                className={`px-2 py-1 rounded-lg text-[10px] ${
-                                  u.status === 'ACTIVE' ? 'border border-rose-200 hover:bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-700'
-                                }`}
-                              >
-                                {u.status === 'ACTIVE' ? 'ปิดการใช้งาน' : 'เปิดการใช้งาน'}
-                              </button>
                             </td>
                           </tr>
-                        ))}
+                        ))
+                        })()}
                       </tbody>
                     </table>
                   </div>
+
+                  <PaginationControls 
+                    currentPage={userPage} 
+                    totalPages={Math.ceil(users.length / userPageSize) || 1} 
+                    onPageChange={setUserPage} 
+                    pageSize={userPageSize} 
+                    onPageSizeChange={setUserPageSize} 
+                    totalItems={users.length} 
+                  />
                 </div>
               )}
             </div>
@@ -1066,25 +1805,34 @@ export default function AdminPage() {
 
       {/* ==================== DETAIL/APPROVE MODAL ==================== */}
       {selectedTxn && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in print:hidden">
           <div className="w-full max-w-3xl bg-white rounded-3xl shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto flex flex-col">
             {/* Header */}
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-slate-800 text-base">รายละเอียดเอกสาร {selectedTxn.docNo}</h3>
-              <button
-                onClick={() => setSelectedTxn(null)}
-                className="w-8 h-8 rounded-full border border-slate-100 hover:bg-slate-50 flex items-center justify-center text-slate-400 text-sm font-bold"
-              >
-                ✕
-              </button>
+              <h3 className="font-bold text-slate-800 text-xl">รายละเอียดเอกสาร {selectedTxn.docNo}</h3>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowPrintPreview(true)}
+                  className="px-4 py-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 font-medium text-[19px] flex items-center gap-2 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                  พิมพ์เอกสาร
+                </button>
+                <button
+                  onClick={() => setSelectedTxn(null)}
+                  className="w-8 h-8 rounded-full border border-slate-100 hover:bg-slate-50 flex items-center justify-center text-slate-400 text-[21px] font-bold"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             {/* Content */}
             <div className="p-6 space-y-6 flex-1 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className="grid grid-cols-2 gap-4 text-[21px]">
                 <div>
                   <span className="text-slate-400">ประเภทรายการ:</span>
-                  <div className="font-bold text-slate-800">{selectedTxn.docType} {selectedTxn.returnSubtype ? `(${selectedTxn.returnSubtype})` : ''}</div>
+                  <div className="font-bold text-slate-800">{getDocTypeThai(selectedTxn.docType, selectedTxn.returnSubtype)}</div>
                 </div>
                 <div>
                   <span className="text-slate-400">ผู้ส่งข้อมูล:</span>
@@ -1096,7 +1844,7 @@ export default function AdminPage() {
                 </div>
                 <div>
                   <span className="text-slate-400">วันที่ส่งข้อมูล:</span>
-                  <div className="font-bold text-slate-800">{new Date(selectedTxn.createdAt).toLocaleString('th-TH')}</div>
+                  <div className="font-bold text-slate-800">{formatDate(selectedTxn.createdAt)}</div>
                 </div>
                 <div>
                   <span className="text-slate-400">หมายเหตุ/บันทึก:</span>
@@ -1105,7 +1853,7 @@ export default function AdminPage() {
                 <div>
                   <span className="text-slate-400">สถานะรายการ:</span>
                   <div>
-                    <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
+                    <span className={`text-[18px] px-2.5 py-0.5 rounded-full font-bold ${
                       selectedTxn.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
                       selectedTxn.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
                       selectedTxn.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'
@@ -1116,7 +1864,7 @@ export default function AdminPage() {
 
               {/* Lines Table */}
               <div className="border border-slate-100 rounded-2xl overflow-hidden">
-                <table className="w-full text-left text-xs border-collapse">
+                <table className="w-full text-left text-[21px] border-collapse">
                   <thead className="bg-slate-50 text-slate-400 font-bold border-b border-slate-100">
                     <tr>
                       <th className="p-3">รหัสสินค้า</th>
@@ -1143,7 +1891,7 @@ export default function AdminPage() {
               {/* Evidence Picture */}
               {selectedTxn.evidenceKey && (
                 <div className="space-y-2">
-                  <span className="text-xs text-slate-400">รูปภาพสลิปหลักฐานแนบ:</span>
+                  <span className="text-[21px] text-slate-400">รูปภาพสลิปหลักฐานแนบ:</span>
                   <div className="border border-slate-100 rounded-2xl p-4 flex items-center justify-center bg-slate-50/50">
                     <img
                       src={`${BASE}/api/upload/file/${selectedTxn.evidenceKey}`}
@@ -1159,7 +1907,7 @@ export default function AdminPage() {
             <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
               <button
                 onClick={() => setSelectedTxn(null)}
-                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold transition-all text-xs"
+                className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold transition-all text-[21px]"
               >
                 ปิดหน้าต่าง
               </button>
@@ -1167,13 +1915,13 @@ export default function AdminPage() {
                 <>
                   <button
                     onClick={() => setShowRejectModal(true)}
-                    className="px-4 py-2 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl font-bold transition-all text-xs"
+                    className="px-4 py-2 border border-rose-200 hover:bg-rose-50 text-rose-600 rounded-xl font-bold transition-all text-[21px]"
                   >
                     ปฏิเสธเอกสาร
                   </button>
                   <button
-                    onClick={() => handleApproveTxn(selectedTxn.docNo)}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/25 transition-all text-xs"
+                    onClick={() => handleApproveTxnClick(selectedTxn.docNo)}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/25 transition-all text-[21px]"
                   >
                     อนุมัติเอกสาร
                   </button>
@@ -1182,7 +1930,7 @@ export default function AdminPage() {
               {selectedTxn.status === 'APPROVED' && (
                 <button
                   onClick={() => setShowCancelModal(true)}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-lg shadow-rose-500/25 transition-all text-xs"
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-lg shadow-rose-500/25 transition-all text-[21px]"
                 >
                   ยกเลิกเอกสาร (คืนสต็อก)
                 </button>
@@ -1196,28 +1944,96 @@ export default function AdminPage() {
       {showRejectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl space-y-4">
-            <h3 className="font-bold text-slate-800 text-sm">ระบุเหตุผลการปฏิเสธเอกสาร</h3>
+            <h3 className="font-bold text-slate-800 text-[21px]">ระบุเหตุผลการปฏิเสธเอกสาร</h3>
             <textarea
               required
               rows={3}
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="กรุณาเขียนเหตุผล เช่น รูปหลักฐานไม่ถูกต้อง หรือ สต็อกสินค้าไม่ถูกต้อง..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[21px] text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
             />
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => setShowRejectModal(false)}
-                className="px-3 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs"
+                className="px-3 py-2 border border-slate-200 text-slate-500 rounded-lg text-[21px]"
               >
                 ยกเลิก
               </button>
               <button
                 onClick={handleRejectTxnSubmit}
                 disabled={!rejectReason.trim()}
-                className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs disabled:opacity-50"
+                className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[21px] disabled:opacity-50"
               >
                 ยืนยันการปฏิเสธ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* IMPORT PREVIEW MODAL */}
+      {showImportPreviewModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+          <div className="w-full max-w-4xl max-h-[80vh] flex flex-col bg-white rounded-3xl p-6 shadow-2xl">
+            <h3 className="font-bold text-slate-800 text-[24px] mb-2">ยืนยันการนำเข้าข้อมูล</h3>
+            <p className="text-[21px] text-slate-500 mb-4">
+              คุณกำลังจะนำเข้าข้อมูลจำนวน <strong className="text-emerald-600">{importPreviewData.length}</strong> รายการ
+              กรุณาตรวจสอบความถูกต้องของข้อมูล (แสดงตัวอย่างสูงสุด 5 รายการแรก)
+            </p>
+            
+            <div className="flex-1 overflow-auto border border-slate-100 rounded-xl mb-4">
+              <table className="w-full text-left text-[20px]">
+                <thead className="bg-slate-50 sticky top-0">
+                  <tr>
+                    {importPreviewData.length > 0 && Object.keys(importPreviewData[0]).map(key => (
+                      <th key={key} className="p-3 font-semibold text-slate-600">{key}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {importPreviewData.slice(0, 5).map((row, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50">
+                      {Object.entries(row).map(([key, val], colIdx) => {
+                        let displayValue = String(val ?? '-');
+                        if (key.toLowerCase().includes('date') && val) {
+                          displayValue = formatDateOnly(val as string);
+                        } else if (key === 'price' && val !== undefined) {
+                          displayValue = Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        }
+                        return (
+                          <td key={colIdx} className="p-3 text-slate-600 truncate max-w-[200px]">
+                            {displayValue}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {importPreviewData.length > 5 && (
+                <div className="p-3 text-center text-slate-400 text-[19px] bg-slate-50/50">
+                  ... และอีก {importPreviewData.length - 5} รายการ
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 mt-auto pt-4 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  setShowImportPreviewModal(false);
+                  setImportPreviewData([]);
+                }}
+                className="px-4 py-2 border border-slate-200 text-slate-500 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleConfirmImport}
+                className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 transition-all flex items-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                ยืนยันการนำเข้า
               </button>
             </div>
           </div>
@@ -1228,25 +2044,25 @@ export default function AdminPage() {
       {showCancelModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl space-y-4">
-            <h3 className="font-bold text-slate-800 text-sm">ยืนยันการยกเลิกเอกสารที่อนุมัติแล้ว</h3>
-            <p className="text-xs text-slate-400">ระบบจะทำการดึงยอดสต็อกหักลบกลับด้าน (Rollback) ให้อัตโนมัติ</p>
+            <h3 className="font-bold text-slate-800 text-[21px]">ยืนยันการยกเลิกเอกสารที่อนุมัติแล้ว</h3>
+            <p className="text-[21px] text-slate-400">ระบบจะทำการดึงยอดสต็อกหักลบกลับด้าน (Rollback) ให้อัตโนมัติ</p>
             <textarea
               rows={3}
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
               placeholder="ระบุเหตุผลการยกเลิก เช่น ลูกค้าขอยกเลิกออเดอร์ (ระบุหรือไม่ระบุก็ได้)..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-[21px] text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
             />
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => setShowCancelModal(false)}
-                className="px-3 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs"
+                className="px-3 py-2 border border-slate-200 text-slate-500 rounded-lg text-[21px]"
               >
                 ปิด
               </button>
               <button
                 onClick={handleCancelTxnSubmit}
-                className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs"
+                className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[21px]"
               >
                 ยืนยันยกเลิก & Rollback สต็อก
               </button>
@@ -1259,8 +2075,8 @@ export default function AdminPage() {
       {showProductModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl">
-            <h3 className="font-bold text-slate-800 text-sm mb-4">{editingProduct ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่'}</h3>
-            <form onSubmit={handleProductSubmit} className="space-y-4 text-xs">
+            <h3 className="font-bold text-slate-800 text-[21px] mb-4">{editingProduct ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่'}</h3>
+            <form onSubmit={handleProductSubmit} className="space-y-4 text-[21px]">
               <div>
                 <label className="block text-slate-400 mb-1">รหัส SKU</label>
                 <input
@@ -1296,7 +2112,7 @@ export default function AdminPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1">วันเริ่มสัญญา (ถ้ามี)</label>
+                  <label className="block text-slate-400 mb-1">วันที่เริ่มต้น (ถ้ามี)</label>
                   <input
                     type="date"
                     value={productForm.startDate}
@@ -1305,7 +2121,7 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 mb-1">วันสิ้นสุดสัญญา (ถ้ามี)</label>
+                  <label className="block text-slate-400 mb-1">วันที่สิ้นสุด (ถ้ามี)</label>
                   <input
                     type="date"
                     value={productForm.endDate}
@@ -1338,8 +2154,8 @@ export default function AdminPage() {
       {showStoreModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl">
-            <h3 className="font-bold text-slate-800 text-sm mb-4">{editingStore ? 'แก้ไขร้านค้า' : 'เพิ่มร้านค้าใหม่'}</h3>
-            <form onSubmit={handleStoreSubmit} className="space-y-4 text-xs">
+            <h3 className="font-bold text-slate-800 text-[21px] mb-4">{editingStore ? 'แก้ไขร้านค้า' : 'เพิ่มร้านค้าใหม่'}</h3>
+            <form onSubmit={handleStoreSubmit} className="space-y-4 text-[21px]">
               <div>
                 <label className="block text-slate-400 mb-1">ชื่อร้านขายยา</label>
                 <input
@@ -1352,13 +2168,43 @@ export default function AdminPage() {
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">ที่อยู่/ทำเล</label>
+                <label className="block text-slate-400 mb-1">ที่อยู่</label>
                 <input
                   type="text"
                   value={storeForm.location}
                   onChange={(e) => setStoreForm({ ...storeForm, location: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800"
-                  placeholder="เช่น กรุงเทพฯ หรือ ลิงก์แผนที่ Google Maps"
+                  placeholder="เช่น เลขที่ 123 ถนน A"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">จังหวัด</label>
+                <input
+                  type="text"
+                  value={storeForm.province}
+                  onChange={(e) => setStoreForm({ ...storeForm, province: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800"
+                  placeholder="เช่น กรุงเทพมหานคร"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">ตำแหน่งเก็บ</label>
+                <input
+                  type="text"
+                  value={storeForm.storageLocation}
+                  onChange={(e) => setStoreForm({ ...storeForm, storageLocation: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800"
+                  placeholder="เช่น ชั้น 2"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1">เบอร์โทรศัพท์</label>
+                <input
+                  type="text"
+                  value={storeForm.phone}
+                  onChange={(e) => setStoreForm({ ...storeForm, phone: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800"
+                  placeholder="เช่น 02-123-4567"
                 />
               </div>
               <div>
@@ -1398,8 +2244,19 @@ export default function AdminPage() {
       {showUserModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl">
-            <h3 className="font-bold text-slate-800 text-sm mb-4">{editingUser ? 'แก้ไขพนักงาน' : 'เพิ่มผู้ใช้งานระบบใหม่'}</h3>
-            <form onSubmit={handleUserSubmit} className="space-y-4 text-xs">
+            <h3 className="font-bold text-slate-800 text-[21px] mb-4">{editingUser ? 'แก้ไขพนักงาน' : 'เพิ่มผู้ใช้งานระบบใหม่'}</h3>
+            <form onSubmit={handleUserSubmit} className="space-y-4 text-[21px]">
+              <div>
+                <label className="block text-slate-400 mb-1">รหัสพนักงาน</label>
+                <input
+                  type="text"
+                  required
+                  value={userForm.code}
+                  onChange={(e) => setUserForm({ ...userForm, code: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800"
+                  placeholder="เช่น USR001"
+                />
+              </div>
               <div>
                 <label className="block text-slate-400 mb-1">Username (ชื่อล็อกอิน)</label>
                 <input
@@ -1416,6 +2273,7 @@ export default function AdminPage() {
                 <input
                   type="password"
                   required={!editingUser}
+                  autoComplete="new-password"
                   value={userForm.password}
                   onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800"
@@ -1469,8 +2327,8 @@ export default function AdminPage() {
       {showTransferModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl">
-            <h3 className="font-bold text-slate-800 text-sm mb-4">โอนย้ายความรับผิดชอบร้านค้า</h3>
-            <form onSubmit={handleTransferSubmit} className="space-y-4 text-xs">
+            <h3 className="font-bold text-slate-800 text-[21px] mb-4">โอนย้ายความรับผิดชอบร้านค้า</h3>
+            <form onSubmit={handleTransferSubmit} className="space-y-4 text-[21px]">
               <p className="text-slate-400">เลือกพนักงานเซลล์ที่จะให้มารับหน้าที่ดูแลร้านค้าแทน:</p>
               <div>
                 <label className="block text-slate-400 mb-1">เลือกผู้ดูแลคนใหม่</label>
@@ -1507,5 +2365,123 @@ export default function AdminPage() {
         </div>
       )}
     </div>
+
+      {/* Confirm Approve Modal */}
+      {showApproveConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+              </div>
+              <h3 className="text-3xl font-bold text-slate-800 mb-2">ยืนยันการอนุมัติเอกสาร</h3>
+              <p className="text-slate-600">คุณต้องการอนุมัติเอกสารจำนวน <span className="font-bold text-emerald-600">{selectedApprovals.length}</span> รายการใช่หรือไม่?</p>
+            </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowApproveConfirmModal(false)}
+                className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBulkApprove}
+                disabled={isApproving}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {isApproving ? 'กำลังดำเนินการ...' : 'ยืนยันการอนุมัติ'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Single Confirm Approve Modal */}
+      {singleApproveDocNo && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+              </div>
+              <h3 className="text-3xl font-bold text-slate-800 mb-2">ยืนยันการอนุมัติเอกสาร</h3>
+              <p className="text-slate-600">คุณต้องการอนุมัติเอกสาร <span className="font-bold text-emerald-600">{singleApproveDocNo}</span> ใช่หรือไม่?</p>
+            </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setSingleApproveDocNo(null)}
+                className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSingleApprove}
+                disabled={isApproving}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {isApproving ? 'กำลังดำเนินการ...' : 'ยืนยันการอนุมัติ'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Printable Area / Preview */}
+      {showPrintPreview && selectedTxn && (
+        <div className="fixed inset-0 z-[100] bg-slate-300 flex flex-col overflow-y-auto print:bg-white">
+          {/* Toolbar */}
+          <div className="sticky top-0 w-full bg-slate-800 text-white p-4 flex justify-between items-center z-10 shadow-lg print:hidden">
+            <button onClick={() => setShowPrintPreview(false)} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold flex items-center gap-2 text-[20px] transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+              ปิดหน้าต่าง
+            </button>
+            <div className="flex items-center gap-4">
+              <span className="text-slate-300 text-[19px] hidden sm:block">คุณสามารถเลือกสั่งพิมพ์ หรือดาวน์โหลดเป็น PDF ได้</span>
+              
+              <button onClick={() => handleDownloadPdf(selectedTxn.docNo)} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 rounded-xl font-bold flex items-center gap-2 text-[20px] transition-colors shadow-md text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                ดาวน์โหลด PDF
+              </button>
+              
+              <button onClick={() => window.print()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold flex items-center gap-2 text-[20px] transition-colors shadow-md text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                สั่งพิมพ์
+              </button>
+            </div>
+          </div>
+          
+          {/* A4 Document Preview */}
+          <div className="flex-1 py-8 flex justify-center print:p-0">
+            <div className="bg-white shadow-2xl print:shadow-none w-full max-w-[210mm] min-h-[297mm]">
+               <PrintTxn 
+                 txn={selectedTxn} 
+                 store={stores.find((s: any) => s.id === selectedTxn.storeId || s.name === selectedTxn.storeName) || {}} 
+               />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
+const getDocTypeThai = (docType: string, returnSubtype?: string | null) => {
+  if (docType === 'REQUEST') return 'เบิกของ';
+  if (docType === 'CONSIGN') return 'ฝากขาย';
+  if (docType === 'SALE') return 'ขายออก';
+  if (docType === 'RETURN') {
+    if (returnSubtype === 'PHARMACY_TO_SALE') return 'คืนของ (ร้านยา ➔ เซลล์)';
+    if (returnSubtype === 'SALE_TO_COMPANY') return 'คืนของ (เซลล์ ➔ บริษัท)';
+    return 'คืนของ';
+  }
+  return docType;
+};
+
+

@@ -1,0 +1,1 @@
+ALTER TABLE "stores" ADD COLUMN "status" "record_status" DEFAULT 'ACTIVE' NOT NULL;

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, AnyPgColumn } from 'drizzle-orm/pg-core';
 import { userRoleEnum, recordStatusEnum } from './enums.js';
 
 export const users = pgTable('users', {
@@ -11,6 +11,7 @@ export const users = pgTable('users', {
   role: userRoleEnum('role').notNull(),
   status: recordStatusEnum('status').notNull().default('ACTIVE'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid('updated_by').references((): AnyPgColumn => users.id),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -16,7 +16,12 @@ export async function apiFetch<T>(
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.message ?? `API error ${res.status}`);
+    let msg = body.message ?? `API error ${res.status}`;
+    if (body.errors?.fieldErrors) {
+      const errs = Object.values(body.errors.fieldErrors).flat();
+      if (errs.length > 0) msg += `: ${errs.join(', ')}`;
+    }
+    throw new Error(msg);
   }
   return res.json() as Promise<T>;
 }
@@ -44,6 +49,12 @@ export const productsApi = {
       token,
       body: JSON.stringify(data),
     }),
+  bulkImport: (data: any[], token: string) =>
+    apiFetch<any>('/products/bulk', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(data),
+    }),
   update: (id: string, data: any, token: string) =>
     apiFetch<any>(`/products/${id}`, {
       method: 'PATCH',
@@ -64,6 +75,12 @@ export const storesApi = {
     apiFetch<any>(`/stores/${id}`, { token }),
   create: (data: any, token: string) =>
     apiFetch<any>('/stores', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(data),
+    }),
+  bulkImport: (data: any[], token: string) =>
+    apiFetch<any>('/stores/bulk', {
       method: 'POST',
       token,
       body: JSON.stringify(data),
@@ -94,6 +111,12 @@ export const usersApi = {
     apiFetch<any>(`/users/${id}`, { token }),
   create: (data: any, token: string) =>
     apiFetch<any>('/users', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(data),
+    }),
+  bulkImport: (data: any[], token: string) =>
+    apiFetch<any>('/users/bulk', {
       method: 'POST',
       token,
       body: JSON.stringify(data),
@@ -159,8 +182,14 @@ export const transactionsApi = {
 };
 
 export const dashboardApi = {
-  getStats: (token: string) =>
-    apiFetch<any>('/dashboard/stats', { token }),
+  getStats: (token: string, query?: { startDate?: string; endDate?: string; saleUserId?: string }) => {
+    const params = new URLSearchParams();
+    if (query?.startDate) params.append('startDate', query.startDate);
+    if (query?.endDate) params.append('endDate', query.endDate);
+    if (query?.saleUserId) params.append('saleUserId', query.saleUserId);
+    const qStr = params.toString();
+    return apiFetch<any>(`/dashboard/stats${qStr ? '?' + qStr : ''}`, { token });
+  },
   getMobileStats: (token: string) =>
     apiFetch<any>('/dashboard/mobile', { token }),
 };

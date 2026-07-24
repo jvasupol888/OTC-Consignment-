@@ -8,20 +8,20 @@ export default function DashboardView({ stats, recentTxns }: { stats: any, recen
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
-          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">รายการรออนุมัติ</span>
-          <h3 className="text-3xl font-black text-amber-500">{stats.pendingCount} <span className="text-xs font-normal text-slate-400">ใบ</span></h3>
+          <span className="text-base text-slate-400 font-bold uppercase tracking-wider">รายการรออนุมัติ</span>
+          <h3 className="text-5xl font-black text-amber-500">{stats.pendingCount} <span className="text-base font-normal text-slate-400">ใบ</span></h3>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
-          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">พนักงานขายที่ทำงานอยู่</span>
-          <h3 className="text-3xl font-black text-indigo-600">{stats.activeSalesCount} <span className="text-xs font-normal text-slate-400">คน</span></h3>
+          <span className="text-base text-slate-400 font-bold uppercase tracking-wider">พนักงานขายที่ทำงานอยู่</span>
+          <h3 className="text-5xl font-black text-indigo-600">{stats.activeSalesCount} <span className="text-base font-normal text-slate-400">คน</span></h3>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
-          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">ยอดขายสินค้าฝากขายสะสม</span>
-          <h3 className="text-3xl font-black text-emerald-600">฿{stats.totalSalesValue?.toLocaleString()}</h3>
+          <span className="text-base text-slate-400 font-bold uppercase tracking-wider">ยอดขายสินค้าฝากขายสะสม</span>
+          <h3 className="text-5xl font-black text-emerald-600">฿{stats.totalSalesValue?.toLocaleString()}</h3>
         </div>
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:shadow-md transition-shadow">
-          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">ร้านค้าเครือข่ายฝากขาย</span>
-          <h3 className="text-3xl font-black text-slate-700">{stats.totalStores} <span className="text-xs font-normal text-slate-400">ร้าน</span></h3>
+          <span className="text-base text-slate-400 font-bold uppercase tracking-wider">ร้านค้าเครือข่ายฝากขาย</span>
+          <h3 className="text-5xl font-black text-slate-700">{stats.totalStores} <span className="text-base font-normal text-slate-400">ร้าน</span></h3>
         </div>
       </div>
 
@@ -29,7 +29,7 @@ export default function DashboardView({ stats, recentTxns }: { stats: any, recen
       <div className="grid grid-cols-3 gap-6">
         {/* SVG Chart */}
         <div className="col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-          <h4 className="text-sm font-bold text-slate-700 mb-4">แนวโน้มยอดขายสัปดาห์นี้ (7 วันล่าสุด)</h4>
+          <h4 className="text-lg font-bold text-slate-700 mb-4">แนวโน้มยอดขายสัปดาห์นี้ (7 วันล่าสุด)</h4>
           {stats.chartData?.length > 0 ? (
             <div>
               {(() => {
@@ -67,22 +67,22 @@ export default function DashboardView({ stats, recentTxns }: { stats: any, recen
               })()}
             </div>
           ) : (
-            <div className="h-48 flex items-center justify-center text-slate-400 text-xs">ยังไม่มีข้อมูลยอดขายในสัปดาห์นี้</div>
+            <div className="h-48 flex items-center justify-center text-slate-400 text-base">ยังไม่มีข้อมูลยอดขายในสัปดาห์นี้</div>
           )}
         </div>
 
         {/* Recent Transactions */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
           <div>
-            <h4 className="text-sm font-bold text-slate-700 mb-4">ประวัติรายการล่าสุด</h4>
+            <h4 className="text-lg font-bold text-slate-700 mb-4">ประวัติรายการล่าสุด</h4>
             <div className="space-y-3">
               {recentTxns.map((t: any) => (
                 <div key={t.id} className="flex items-center justify-between border-b border-slate-50 pb-2 hover:bg-slate-50 transition-colors rounded p-1">
                   <div>
-                    <div className="font-bold text-xs text-slate-800">{t.docNo}</div>
-                    <div className="text-[10px] text-slate-400">{t.creatorName} ({t.docType})</div>
+                    <div className="font-bold text-base text-slate-800">{t.docNo}</div>
+                    <div className="text-[16px] text-slate-400">{t.creatorName} ({t.docType})</div>
                   </div>
-                  <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
+                  <span className={`text-[15px] px-2 py-0.5 rounded-full font-bold ${
                     t.status === 'PENDING' ? 'bg-amber-100 text-amber-700' :
                     t.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
                     t.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'

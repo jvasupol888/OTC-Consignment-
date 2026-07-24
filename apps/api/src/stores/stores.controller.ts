@@ -10,9 +10,10 @@ import {
 } from '@nestjs/common';
 import { StoresService } from './stores.service.js';
 import { JwtAuthGuard, RolesGuard } from '../auth/guards.js';
-import { Roles } from '../auth/decorators.js';
+import { Roles, CurrentUser, type AuthUser } from '../auth/decorators.js';
 import { ZodBody } from '../common/zod.pipe.js';
 import { upsertStoreSchema, transferStoreSchema, type UpsertStoreInput, type TransferStoreInput } from '@otc/shared';
+import { z } from 'zod';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('stores')
@@ -30,9 +31,21 @@ export class StoresController {
   }
 
   @Roles('ADMIN', 'SYSTEM_ADMIN')
+  @Post('bulk')
+  bulkImport(
+    @Body(new ZodBody(z.array(upsertStoreSchema))) items: UpsertStoreInput[],
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.storesService.bulkImport(items, user.sub);
+  }
+
+  @Roles('ADMIN', 'SYSTEM_ADMIN')
   @Post()
-  create(@Body(new ZodBody(upsertStoreSchema)) body: UpsertStoreInput) {
-    return this.storesService.create(body);
+  create(
+    @Body(new ZodBody(upsertStoreSchema)) body: UpsertStoreInput,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.storesService.create(body, user.sub);
   }
 
   @Roles('ADMIN', 'SYSTEM_ADMIN')
@@ -40,19 +53,26 @@ export class StoresController {
   update(
     @Param('id') id: string,
     @Body(new ZodBody(upsertStoreSchema)) body: UpsertStoreInput,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.storesService.update(id, body);
+    return this.storesService.update(id, body, user.sub);
   }
 
   @Roles('ADMIN', 'SYSTEM_ADMIN')
   @Post('transfer')
-  transfer(@Body(new ZodBody(transferStoreSchema)) body: TransferStoreInput) {
-    return this.storesService.transfer(body);
+  transfer(
+    @Body(new ZodBody(transferStoreSchema)) body: TransferStoreInput,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.storesService.transfer(body, user.sub);
   }
 
   @Roles('ADMIN', 'SYSTEM_ADMIN')
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.storesService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.storesService.remove(id, user.sub);
   }
 }

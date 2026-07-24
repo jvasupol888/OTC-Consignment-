@@ -23,35 +23,13 @@ import { useFonts } from 'expo-font';
 import { Feather } from '@expo/vector-icons';
 
 // --- Global Font Apply ---
-import { DBHeaventBase64 } from './font-base64';
-
-if (Platform.OS === 'web') {
-  const style = document.createElement('style');
-  style.type = 'text/css';
-  style.appendChild(document.createTextNode(`
-    @font-face {
-      font-family: 'DBHeavent';
-      src: url(data:font/ttf;base64,${DBHeaventBase64}) format('truetype');
-    }
-  `));
-  document.head.appendChild(style);
-}
-
-const applyFont = (origin: any) => {
-  const flattened = StyleSheet.flatten(origin.props.style) || {};
-  if (!flattened.fontFamily || flattened.fontFamily === 'System' || flattened.fontFamily === 'sans-serif') {
-    return React.cloneElement(origin, {
-      style: { fontFamily: 'DBHeavent', ...flattened }
-    });
-  }
-  return origin;
-};
-
 const oldTextRender = (Text as any).render;
 if (oldTextRender) {
   (Text as any).render = function (...args: any[]) {
     const origin = oldTextRender.call(this, ...args);
-    return applyFont(origin);
+    return React.cloneElement(origin, {
+      style: { fontFamily: 'DBHeavent', ...(origin.props.style || {}) }
+    });
   };
 } else {
   if (!(Text as any).defaultProps) (Text as any).defaultProps = {};
@@ -62,7 +40,9 @@ const oldTextInputRender = (TextInput as any).render;
 if (oldTextInputRender) {
   (TextInput as any).render = function (...args: any[]) {
     const origin = oldTextInputRender.call(this, ...args);
-    return applyFont(origin);
+    return React.cloneElement(origin, {
+      style: { fontFamily: 'DBHeavent', ...(origin.props.style || {}) }
+    });
   };
 } else {
   if (!(TextInput as any).defaultProps) (TextInput as any).defaultProps = {};
@@ -132,7 +112,7 @@ class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <Text style={{ fontSize: 33, color: 'red', fontWeight: 'bold' }}>Something went wrong.</Text>
+          <Text style={{ fontSize: 26, color: 'red', fontWeight: 'bold' }}>Something went wrong.</Text>
           <Text style={{ marginTop: 10 }}>{this.state.error?.toString()}</Text>
         </View>
       );
@@ -276,12 +256,10 @@ function App() {
   };
 
   const handlePickImage = async () => {
-    if (Platform.OS !== 'web') {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้เข้าถึงรูปภาพในเครื่องเพื่ออัปโหลดหลักฐาน');
-        return;
-      }
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้เข้าถึงรูปภาพในเครื่องเพื่ออัปโหลดหลักฐาน');
+      return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -300,14 +278,7 @@ function App() {
       const match = /\.(\w+)$/.exec(fileName);
       const type = match ? `image/${match[1]}` : `image/jpeg`;
       const formData = new FormData();
-      
-      if (Platform.OS === 'web') {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        formData.append('file', blob, fileName);
-      } else {
-        formData.append('file', { uri, name: fileName, type } as any);
-      }
+      formData.append('file', { uri, name: fileName, type } as any);
       
       const res = await fetch(`${API_URL}/api/upload`, {
         method: 'POST',
@@ -375,65 +346,59 @@ function App() {
   // --- LOGIN SCREEN ---
   if (!token) {
     return (
-            <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'center', padding: 32, maxWidth: 500, alignSelf: 'center', width: '100%' }}>
-          
-          <View style={{ alignItems: 'center', marginBottom: 48 }}>
+      <View style={[styles.loginWrapper, { backgroundColor: '#f0fdf4' }]}>
+        <View style={styles.loginBgTop} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={[styles.loginContainer, { maxWidth: 500, alignSelf: 'center', width: '100%' }]}>
+          <View style={styles.loginCard}>
             <Image 
               source={{ uri: 'https://vulcancoalition.com/wp-content/uploads/2024/11/Nutrition-New.webp' }}
-              style={{ width: 240, height: 100, resizeMode: 'contain', marginBottom: 24 }}
+              style={{ width: 160, height: 70, resizeMode: 'contain', marginBottom: 24 }}
             />
             
-          </View>
-          
-          <View style={{ marginBottom: 32 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 16, paddingHorizontal: 20, paddingVertical: 4, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 20 }}>
-              <Feather name="user" size={24} color={theme.colors.primary} style={{ marginRight: 16 }} />
-              <TextInput
-                style={{ flex: 1, paddingVertical: 14, fontFamily: 'DBHeavent', fontSize: 32, color: theme.colors.text }}
-                placeholder="ชื่อผู้ใช้งาน"
-                placeholderTextColor="#94a3b8"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-              />
+            <View style={{ width: '100%', marginBottom: 32, alignItems: 'center' }}>
+              <Text style={[styles.loginTitle, { textAlign: 'center', color: theme.colors.primaryDark }]}>Welcome</Text>
+              <Text style={[styles.loginSubtitle, { textAlign: 'center' }]}>Wesell Consignment</Text>
             </View>
             
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 16, paddingHorizontal: 20, paddingVertical: 4, borderWidth: 1, borderColor: '#e2e8f0' }}>
-              <Feather name="lock" size={24} color={theme.colors.primary} style={{ marginRight: 16 }} />
-              <TextInput
-                style={{ flex: 1, paddingVertical: 14, fontFamily: 'DBHeavent', fontSize: 32, color: theme.colors.text }}
-                placeholder="รหัสผ่าน"
-                placeholderTextColor="#94a3b8"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-              />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>ชื่อผู้ใช้งาน</Text>
+              <View style={styles.inputWrapper}>
+                <Feather name="user" size={20} color={theme.colors.textMuted} style={{ marginRight: 12 }} />
+                <TextInput
+                  style={styles.inputSleek}
+                  placeholder="ระบุชื่อผู้ใช้งาน"
+                  placeholderTextColor="#94a3b8"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                />
+              </View>
             </View>
-          </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>รหัสผ่าน</Text>
+              <View style={styles.inputWrapper}>
+                <Feather name="lock" size={20} color={theme.colors.textMuted} style={{ marginRight: 12 }} />
+                <TextInput
+                  style={styles.inputSleek}
+                  placeholder="ระบุรหัสผ่าน"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                />
+              </View>
+            </View>
 
-          <TouchableOpacity style={{ backgroundColor: theme.colors.primary, paddingVertical: 16, borderRadius: 100, alignItems: 'center', shadowColor: theme.colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8 }} onPress={handleLogin} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: 'DBHeavent', fontSize: 36, color: '#fff', fontWeight: 'bold' }}>เข้าสู่ระบบ</Text>}
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin} disabled={loading}>
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>เข้าสู่ระบบ</Text>}
+            </TouchableOpacity>
+          </View>
         </KeyboardAvoidingView>
       </View>
     );
   }
 
   // --- MAIN APP COMPONENT ---
-  
-  const getDocTypeThai = (docType: string, returnSubtype?: string | null) => {
-    if (docType === 'REQUEST') return 'เบิกของ';
-    if (docType === 'CONSIGN') return 'ฝากขาย';
-    if (docType === 'SALE') return 'ขายออก';
-    if (docType === 'RETURN') {
-      if (returnSubtype === 'PHARMACY_TO_SALE') return 'คืนของ (ร้านยา ➔ เซลล์)';
-      if (returnSubtype === 'SALE_TO_COMPANY') return 'คืนของ (เซลล์ ➔ บริษัท)';
-      return 'คืนของ';
-    }
-    return docType;
-  };
-
   const renderStatusBadge = (status: string) => {
     let bg = '#f1f5f9', color = '#64748b', text = status;
     if (status === 'PENDING') { bg = '#fffbeb'; color = '#d97706'; text = 'รออนุมัติ'; }
@@ -459,7 +424,7 @@ function App() {
             style={{ width: 80, height: 32, resizeMode: 'contain' }}
           />
           <View style={{ marginLeft: 8, borderLeftWidth: 1, borderLeftColor: theme.colors.border, paddingLeft: 8, flex: 1 }}>
-            <Text style={[styles.headerGreeting, { color: theme.colors.text }]} numberOfLines={1}>{user?.fullName || 'เซลล์'}</Text>
+            <Text style={[styles.headerGreeting, { color: theme.colors.text }]} numberOfLines={1}>สวัสดี, {user?.fullName || 'เซลล์'}</Text>
             <Text style={[styles.headerRole, { color: theme.colors.textMuted }]} numberOfLines={1}>Sale Agent</Text>
           </View>
         </View>
@@ -502,8 +467,8 @@ function App() {
                 return (
                   <View style={{ backgroundColor: '#ffffff', borderRadius: 16, padding: 32, alignItems: 'center', borderColor: '#e2e8f0', borderWidth: 1, borderStyle: 'dashed', marginTop: 8 }}>
                     <Feather name="inbox" size={48} color="#cbd5e1" style={{ marginBottom: 12 }} />
-                    <Text style={{ fontFamily: 'DBHeavent', fontSize: 28, color: '#64748b', textAlign: 'center' }}>ไม่มีสินค้าในคลัง</Text>
-                    <Text style={{ fontFamily: 'DBHeavent', fontSize: 25, color: '#94a3b8', textAlign: 'center', marginTop: 4 }}>ขณะนี้คุณยังไม่มีสินค้าคงเหลือในคลัง หรือสินค้าทั้งหมดถูกกระจายไปยังร้านยาแล้ว</Text>
+                    <Text style={{ fontFamily: 'DBHeavent', fontSize: 22, color: '#64748b', textAlign: 'center' }}>ไม่มีสินค้าในคลัง</Text>
+                    <Text style={{ fontFamily: 'DBHeavent', fontSize: 20, color: '#94a3b8', textAlign: 'center', marginTop: 4 }}>ขณะนี้คุณยังไม่มีสินค้าคงเหลือในคลัง หรือสินค้าทั้งหมดถูกกระจายไปยังร้านยาแล้ว</Text>
                   </View>
                 );
               }
@@ -517,9 +482,9 @@ function App() {
                   <View key={inv.id} style={styles.itemRow}>
                     <View style={styles.itemInfo}>
                       <Text style={styles.itemName}>{prd.name}</Text>
-                      <Text style={styles.itemSku}>SKU : {prd.sku}</Text>
+                      <Text style={styles.itemSku}>{prd.sku}</Text>
                       <Text style={styles.itemPrice}>฿{unitPrice.toLocaleString()}</Text>
-                      <Text style={{ fontFamily: 'DBHeavent', fontSize: 21, color: '#64748b', marginTop: 4 }}>
+                      <Text style={{ fontFamily: 'DBHeavent', fontSize: 17, color: '#64748b', marginTop: 4 }}>
                         🗓 เริ่ม: {formatDate(prd.startDate)} - สิ้นสุด: {formatDate(prd.endDate)}
                       </Text>
                     </View>
@@ -600,16 +565,16 @@ function App() {
                           <View key={inv.id} style={styles.storeInvRow}>
                             <View style={{ flex: 1, paddingRight: 8 }}>
                               <Text style={styles.storeInvName}>{prd?.name || inv.productId}</Text>
-                              <Text style={{ fontFamily: 'DBHeavent', fontSize: 23, color: theme.colors.textMuted, marginTop: 2 }}>
+                              <Text style={{ fontFamily: 'DBHeavent', fontSize: 18, color: theme.colors.textMuted, marginTop: 2 }}>
                                 ฿{unitPrice.toLocaleString()} / ชิ้น
                               </Text>
-                              <Text style={{ fontFamily: 'DBHeavent', fontSize: 21, color: '#64748b', marginTop: 2 }}>
+                              <Text style={{ fontFamily: 'DBHeavent', fontSize: 17, color: '#64748b', marginTop: 2 }}>
                                 🗓 เริ่ม: {formatDate(prd?.startDate)} - สิ้นสุด: {formatDate(prd?.endDate)}
                               </Text>
                             </View>
                             <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
                               <Text style={styles.storeInvQty}>{inv.quantity} ชิ้น</Text>
-                              <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: '#3b82f6', marginTop: 2 }}>
+                              <Text style={{ fontFamily: 'DBHeavent', fontSize: 19, color: '#3b82f6', marginTop: 2 }}>
                                 ฿{totalValue.toLocaleString()}
                               </Text>
                             </View>
@@ -636,7 +601,7 @@ function App() {
                     <View style={styles.searchBox}>
                       <Feather name="search" size={18} color={theme.colors.textMuted} style={{ marginRight: 8 }} />
                       <TextInput 
-                        style={{ flex: 1, fontFamily: 'DBHeavent', fontSize: 25 }}
+                        style={{ flex: 1, fontFamily: 'DBHeavent', fontSize: 20 }}
                         placeholder="ค้นหาชื่อร้าน..."
                         value={storeSearchQuery}
                         onChangeText={setStoreSearchQuery}
@@ -737,7 +702,7 @@ function App() {
                     style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
                     onPress={() => setShowTxnStorePicker(true)}
                   >
-                    <Text style={{ fontFamily: 'DBHeavent', fontSize: 26, color: selectedStoreId ? theme.colors.text : theme.colors.textMuted }}>
+                    <Text style={{ fontFamily: 'DBHeavent', fontSize: 21, color: selectedStoreId ? theme.colors.text : theme.colors.textMuted }}>
                       {selectedStoreId ? stores.find(s => s.id === selectedStoreId)?.name : 'กดเพื่อเลือกร้านขายยา...'}
                     </Text>
                     <Feather name="chevron-down" size={20} color={theme.colors.textMuted} />
@@ -764,7 +729,7 @@ function App() {
                     if (!prd) return null;
                     
                     let availableStock = 0;
-                    if (docType === 'SALE' || (docType === 'RETURN' && returnSubtype === 'PHARMACY_TO_SALE')) {
+                    if (docType === 'RETURN' && returnSubtype === 'PHARMACY_TO_SALE') {
                        availableStock = inventoryList.find(i => i.productId === prd.id && i.locationType === 'PHARMACY' && i.storeId === selectedStoreId)?.quantity || 0;
                     } else {
                        availableStock = inventoryList.find(i => i.productId === prd.id && i.locationType === 'SALE')?.quantity || 0;
@@ -842,7 +807,7 @@ function App() {
                     <View style={styles.searchBox}>
                       <Feather name="search" size={18} color={theme.colors.textMuted} style={{ marginRight: 8 }} />
                       <TextInput 
-                        style={{ flex: 1, fontFamily: 'DBHeavent', fontSize: 25 }}
+                        style={{ flex: 1, fontFamily: 'DBHeavent', fontSize: 20 }}
                         placeholder="ค้นหาชื่อสินค้า หรือ SKU..."
                         value={productSearchQuery}
                         onChangeText={setProductSearchQuery}
@@ -862,7 +827,7 @@ function App() {
                       if (isSelected) return null; // Hide already selected
                       
                       let availableStock = 0;
-                      if (docType === 'SALE' || (docType === 'RETURN' && returnSubtype === 'PHARMACY_TO_SALE')) {
+                      if (docType === 'RETURN' && returnSubtype === 'PHARMACY_TO_SALE') {
                          availableStock = inventoryList.find(i => i.productId === prd.id && i.locationType === 'PHARMACY' && i.storeId === selectedStoreId)?.quantity || 0;
                       } else {
                          availableStock = inventoryList.find(i => i.productId === prd.id && i.locationType === 'SALE')?.quantity || 0;
@@ -879,7 +844,7 @@ function App() {
                         >
                           <View style={{ flex: 1 }}>
                             <Text style={styles.prdSelectName}>{prd.name}</Text>
-                            <Text style={styles.itemSku}>SKU : {prd.sku}</Text>
+                            <Text style={styles.itemSku}>{prd.sku}</Text>
                           </View>
                           <View style={styles.stockBadge}>
                             <Text style={styles.stockBadgeText}>สต็อก: {availableStock}</Text>
@@ -905,7 +870,7 @@ function App() {
                     <View style={styles.searchBox}>
                       <Feather name="search" size={18} color={theme.colors.textMuted} style={{ marginRight: 8 }} />
                       <TextInput 
-                        style={{ flex: 1, fontFamily: 'DBHeavent', fontSize: 25 }}
+                        style={{ flex: 1, fontFamily: 'DBHeavent', fontSize: 20 }}
                         placeholder="ค้นหาชื่อร้าน..."
                         value={storeSearchQuery}
                         onChangeText={setStoreSearchQuery}
@@ -986,16 +951,16 @@ function App() {
                       
                       <View style={styles.historyBody}>
                         <View style={{flexDirection: 'row', gap: 8}}>
-                          <Text style={styles.historyTag}>{getDocTypeThai(txn.docType, txn.returnSubtype)}</Text>
+                          <Text style={styles.historyTag}>{txn.docType}</Text>
                           {txn.storeId && <Text style={[styles.historyTag, {backgroundColor: '#eff6ff', color: '#1d4ed8'}]}>{stores.find(s => s.id === txn.storeId)?.name || 'ร้านยา'}</Text>}
                         </View>
                         
                         <View style={{ marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
-                           <Text style={{ fontFamily: 'DBHeavent', color: theme.colors.textMuted, fontSize: 24 }}>
+                           <Text style={{ fontFamily: 'DBHeavent', color: theme.colors.textMuted, fontSize: 19 }}>
                              ทั้งหมด {txn.lines?.length || 0} รายการ
                            </Text>
                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                             <Text style={{ fontFamily: 'DBHeavent', color: theme.colors.primaryDark, fontSize: 24, marginRight: 4 }}>
+                             <Text style={{ fontFamily: 'DBHeavent', color: theme.colors.primaryDark, fontSize: 19, marginRight: 4 }}>
                                ดูรายละเอียด
                              </Text>
                              <Feather name="chevron-right" size={16} color={theme.colors.primaryDark} />
@@ -1022,14 +987,14 @@ function App() {
                     {selectedHistoryTxn && (
                       <>
                         <View style={{ marginBottom: 16 }}>
-                          <Text style={{ fontFamily: 'DBHeavent', fontSize: 30, color: theme.colors.text }}>{selectedHistoryTxn.docNo}</Text>
-                          <Text style={{ fontFamily: 'DBHeavent', fontSize: 25, color: theme.colors.textMuted, marginTop: 4 }}>
+                          <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.text }}>{selectedHistoryTxn.docNo}</Text>
+                          <Text style={{ fontFamily: 'DBHeavent', fontSize: 20, color: theme.colors.textMuted, marginTop: 4 }}>
                             {new Date(selectedHistoryTxn.createdAt).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </Text>
                         </View>
 
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-                          <Text style={styles.historyTag}>{getDocTypeThai(selectedHistoryTxn.docType, selectedHistoryTxn.returnSubtype)}</Text>
+                          <Text style={styles.historyTag}>{selectedHistoryTxn.docType}</Text>
                           {selectedHistoryTxn.storeId && (
                             <Text style={[styles.historyTag, {backgroundColor: '#eff6ff', color: '#1d4ed8'}]}>
                               {stores.find(s => s.id === selectedHistoryTxn.storeId)?.name || 'ร้านยา'}
@@ -1040,12 +1005,12 @@ function App() {
                         
                         {selectedHistoryTxn.remark && (
                           <View style={{ marginBottom: 20 }}>
-                            <Text style={{ fontFamily: 'DBHeavent', fontSize: 25, color: theme.colors.text, marginBottom: 6 }}>หมายเหตุ</Text>
+                            <Text style={{ fontFamily: 'DBHeavent', fontSize: 20, color: theme.colors.text, marginBottom: 6 }}>หมายเหตุ</Text>
                             <Text style={styles.historyRemark}>{selectedHistoryTxn.remark}</Text>
                           </View>
                         )}
 
-                        <Text style={{ fontFamily: 'DBHeavent', fontSize: 28, color: theme.colors.text, marginBottom: 12 }}>รายการสินค้า</Text>
+                        <Text style={{ fontFamily: 'DBHeavent', fontSize: 22, color: theme.colors.text, marginBottom: 12 }}>รายการสินค้า</Text>
                         <View style={{ backgroundColor: theme.colors.background, borderRadius: theme.radius.lg, overflow: 'hidden' }}>
                           {(selectedHistoryTxn.lines || []).map((l: any, idx: number) => {
                             const prd = products.find(p => p.id === l.productId);
@@ -1054,27 +1019,17 @@ function App() {
                             return (
                               <View key={idx} style={{ padding: 16, borderBottomWidth: idx < selectedHistoryTxn.lines.length - 1 ? 1 : 0, borderBottomColor: theme.colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <View style={{ flex: 1, paddingRight: 12 }}>
-                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 26, color: theme.colors.text, fontWeight: 'bold' }}>{prd?.name || l.productId}</Text>
-                                  {prd?.sku && <Text style={{ fontFamily: 'DBHeavent', fontSize: 22, color: theme.colors.textMuted }}>SKU : {prd.sku}</Text>}
-                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.textMuted, marginTop: 4 }}>฿{unitPrice.toLocaleString()} / ชิ้น</Text>
+                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 21, color: theme.colors.text }}>{prd?.name || l.productId}</Text>
+                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 19, color: theme.colors.textMuted, marginTop: 4 }}>฿{unitPrice.toLocaleString()} / ชิ้น</Text>
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
-                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 28, color: theme.colors.primaryDark }}>{l.quantity} ชิ้น</Text>
-                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 25, color: theme.colors.textMuted, marginTop: 4 }}>฿{total.toLocaleString()}</Text>
+                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 22, color: theme.colors.primaryDark }}>{l.quantity} ชิ้น</Text>
+                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 20, color: theme.colors.textMuted, marginTop: 4 }}>฿{total.toLocaleString()}</Text>
                                 </View>
                               </View>
                             );
                           })}
                         </View>
-                        {selectedHistoryTxn.evidenceKey && (
-                          <View style={{ marginTop: 20 }}>
-                            <Text style={{ fontFamily: 'DBHeavent', fontSize: 28, color: theme.colors.text, marginBottom: 12, fontWeight: 'bold' }}>รูปภาพหลักฐาน</Text>
-                            <Image 
-                              source={{ uri: selectedHistoryTxn.evidenceKey.startsWith('http') ? selectedHistoryTxn.evidenceKey : `${API_URL}/api/upload/file/${selectedHistoryTxn.evidenceKey}` }} 
-                              style={{ width: '100%', height: 300, borderRadius: theme.radius.md, resizeMode: 'contain', backgroundColor: '#f1f5f9' }} 
-                            />
-                          </View>
-                        )}
                         <View style={{ height: 40 }} />
                       </>
                     )}
@@ -1116,6 +1071,7 @@ function App() {
 // ULTRA PREMIUM STYLES WITH KANIT
 const styles = StyleSheet.create({
   container: {
+    fontFamily: 'DBHeavent',
     flex: 1,
     backgroundColor: theme.colors.background,
   },
@@ -1125,11 +1081,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loginWrapper: {
+    fontFamily: 'DBHeavent',
     flex: 1,
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
   },
   loginBgTop: {
+    fontFamily: 'DBHeavent',
     position: 'absolute',
     top: 0,
     width: '100%',
@@ -1144,6 +1102,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   loginCard: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.xl,
     padding: 32,
@@ -1155,6 +1114,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   logoCircle: {
+    fontFamily: 'DBHeavent',
     width: 80,
     height: 80,
     borderRadius: 40,
@@ -1164,33 +1124,31 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   logoIcon: {
-    fontSize: 58,
+    fontFamily: 'DBHeavent',
+    fontSize: 46,
   },
   loginTitle: {
     fontFamily: 'DBHeavent',
-    fontSize: 43,
+    fontSize: 34,
     color: theme.colors.text,
     marginBottom: 4,
-    fontWeight: "bold",
-    },
+  },
   loginSubtitle: {
     fontFamily: 'DBHeavent',
-    fontSize: 26,
+    fontSize: 21,
     color: theme.colors.textMuted,
     marginBottom: 32,
-    fontWeight: "bold",
-    },
+  },
   inputGroup: {
     width: '100%',
     marginBottom: 20,
   },
   inputLabel: {
     fontFamily: 'DBHeavent',
-    fontSize: 25,
+    fontSize: 20,
     color: theme.colors.text,
     marginBottom: 8,
-    fontWeight: "bold",
-    },
+  },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1204,7 +1162,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 16,
     fontFamily: 'DBHeavent',
-    fontSize: 28,
+    fontSize: 22,
     color: theme.colors.text,
   },
   input: {
@@ -1214,10 +1172,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
     fontFamily: 'DBHeavent',
-    fontSize: 26,
+    fontSize: 21,
     color: theme.colors.text,
   },
   primaryBtn: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.primary,
     width: '100%',
     padding: 18,
@@ -1229,10 +1188,11 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     fontFamily: 'DBHeavent',
     color: '#fff',
-    fontSize: 30,
+    fontSize: 24,
   },
   // Main App Styles
   header: {
+    fontFamily: 'DBHeavent',
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 16,
     paddingBottom: 16,
@@ -1250,6 +1210,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   avatar: {
+    fontFamily: 'DBHeavent',
     width: 52,
     height: 52,
     borderRadius: 26,
@@ -1261,21 +1222,19 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontFamily: 'DBHeavent',
-    fontSize: 35,
+    fontSize: 28,
     color: '#fff',
   },
   headerGreeting: {
     fontFamily: 'DBHeavent',
-    fontSize: 30,
+    fontSize: 24,
     color: '#fff',
-    fontWeight: "bold",
-    },
+  },
   headerRole: {
     fontFamily: 'DBHeavent',
-    fontSize: 24,
+    fontSize: 19,
     color: theme.colors.primaryLight,
-    fontWeight: "bold",
-    },
+  },
   logoutBtn: {
     backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 12,
@@ -1287,7 +1246,7 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     fontFamily: 'DBHeavent',
-    fontSize: 23,
+    fontSize: 18,
     color: '#fff',
   },
   mainScroll: {
@@ -1301,6 +1260,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summaryCard: {
+    fontFamily: 'DBHeavent',
     borderRadius: theme.radius.xl,
     padding: 20,
     marginBottom: 20,
@@ -1316,21 +1276,22 @@ const styles = StyleSheet.create({
   },
   summaryTitleDark: {
     fontFamily: 'DBHeavent',
-    fontSize: 24,
+    fontSize: 19,
     color: theme.colors.textMuted,
     marginBottom: 4,
-    fontWeight: "bold",
-    },
+  },
   summaryCountDark: {
     fontFamily: 'DBHeavent',
-    fontSize: 43,
+    fontSize: 34,
     color: theme.colors.text,
   },
   summaryUnitDark: {
-    fontSize: 28,
+    fontFamily: 'DBHeavent',
+    fontSize: 22,
     color: theme.colors.textMuted,
   },
   summaryIconBox: {
+    fontFamily: 'DBHeavent',
     width: 40,
     height: 40,
     borderRadius: 14,
@@ -1339,29 +1300,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   summaryIcon: {
-    fontSize: 33,
+    fontFamily: 'DBHeavent',
+    fontSize: 26,
   },
   summaryValueDark: {
     fontFamily: 'DBHeavent',
-    fontSize: 26,
+    fontSize: 21,
     color: theme.colors.textMuted,
   },
   highlightText: {
     fontFamily: 'DBHeavent',
     color: theme.colors.primary,
-    fontSize: 30,
+    fontSize: 24,
   },
   sectionHeader: {
     marginBottom: 16,
-    fontWeight: "bold",
-    },
+  },
   sectionTitle: {
     fontFamily: 'DBHeavent',
-    fontSize: 33,
+    fontSize: 26,
     color: theme.colors.text,
-    fontWeight: "bold",
-    },
+  },
   itemRow: {
+    fontFamily: 'DBHeavent',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1378,24 +1339,23 @@ const styles = StyleSheet.create({
   },
   itemSku: {
     fontFamily: 'DBHeavent',
-    fontSize: 24,
+    fontSize: 19,
     color: theme.colors.textMuted,
     marginBottom: 4,
-    fontWeight: "bold",
-    },
+  },
   itemName: {
     fontFamily: 'DBHeavent',
-    fontSize: 28,
+    fontSize: 22,
     color: theme.colors.text,
     marginBottom: 6,
-    fontWeight: "bold",
-    },
+  },
   itemPrice: {
     fontFamily: 'DBHeavent',
-    fontSize: 26,
+    fontSize: 21,
     color: theme.colors.primary,
   },
   qtyBadge: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.primaryLight,
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -1403,11 +1363,12 @@ const styles = StyleSheet.create({
   },
   itemQty: {
     fontFamily: 'DBHeavent',
-    fontSize: 33,
+    fontSize: 26,
     color: theme.colors.primaryDark,
   },
   // Store Blocks
   storeBlock: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.lg,
     marginBottom: 16,
@@ -1430,21 +1391,22 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   storeIconText: {
-    fontSize: 38,
+    fontFamily: 'DBHeavent',
+    fontSize: 30,
   },
   storeName: {
     fontFamily: 'DBHeavent',
-    fontSize: 28,
+    fontSize: 22,
     color: theme.colors.text,
     marginBottom: 2,
-    fontWeight: "bold",
-    },
+  },
   storeCode: {
     fontFamily: 'DBHeavent',
-    fontSize: 24,
+    fontSize: 19,
     color: theme.colors.textMuted,
   },
   expandBtn: {
+    fontFamily: 'DBHeavent',
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -1453,14 +1415,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   expandBtnActive: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.primary,
   },
   arrowIcon: {
     fontFamily: 'DBHeavent',
-    fontSize: 23,
+    fontSize: 18,
     color: theme.colors.textMuted,
   },
   arrowIconActive: {
+    fontFamily: 'DBHeavent',
     color: '#fff',
     transform: [{ rotate: '180deg' }]
   },
@@ -1471,6 +1435,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: theme.radius.lg,
   },
   storeInvRow: {
+    fontFamily: 'DBHeavent',
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 10,
@@ -1479,18 +1444,17 @@ const styles = StyleSheet.create({
   },
   storeInvName: {
     fontFamily: 'DBHeavent',
-    fontSize: 26,
+    fontSize: 21,
     color: theme.colors.text,
-    fontWeight: "bold",
-    },
+  },
   storeInvQty: {
     fontFamily: 'DBHeavent',
-    fontSize: 26,
+    fontSize: 21,
     color: '#3b82f6',
   },
   emptyText: {
     fontFamily: 'DBHeavent',
-    fontSize: 26,
+    fontSize: 21,
     color: theme.colors.textMuted,
     textAlign: 'center',
     padding: 20,
@@ -1508,6 +1472,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   gridCard: {
+    fontFamily: 'DBHeavent',
     width: '47%',
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.xl,
@@ -1531,17 +1496,17 @@ const styles = StyleSheet.create({
   },
   gridTitle: {
     fontFamily: 'DBHeavent',
-    fontSize: 26,
+    fontSize: 21,
     color: theme.colors.text,
     marginBottom: 4,
-    fontWeight: "bold",
-    },
+  },
   gridDesc: {
     fontFamily: 'DBHeavent',
-    fontSize: 21,
+    fontSize: 17,
     color: theme.colors.textMuted,
   },
   formCard: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.xl,
     padding: 24,
@@ -1574,21 +1539,20 @@ const styles = StyleSheet.create({
   },
   formHeaderTitle: {
     fontFamily: 'DBHeavent',
-    fontSize: 30,
+    fontSize: 24,
     color: theme.colors.primary,
-    fontWeight: "bold",
-    },
+  },
   formGroup: {
     marginBottom: 24,
   },
   label: {
     fontFamily: 'DBHeavent',
-    fontSize: 25,
+    fontSize: 20,
     color: theme.colors.text,
     marginBottom: 12,
-    fontWeight: "bold",
-    },
+  },
   subTypeBtn: {
+    fontFamily: 'DBHeavent',
     flex: 1,
     padding: 14,
     backgroundColor: theme.colors.background,
@@ -1598,17 +1562,20 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   subTypeBtnActive: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.primaryDark,
   },
   subTypeBtnText: {
     fontFamily: 'DBHeavent',
-    fontSize: 25,
+    fontSize: 20,
     color: theme.colors.textMuted,
   },
   subTypeBtnTextActive: {
+    fontFamily: 'DBHeavent',
     color: '#fff',
   },
   pillBtn: {
+    fontFamily: 'DBHeavent',
     paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: theme.colors.background,
@@ -1618,17 +1585,20 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
   },
   pillBtnActive: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.primary,
   },
   pillBtnText: {
     fontFamily: 'DBHeavent',
-    fontSize: 25,
+    fontSize: 20,
     color: theme.colors.textMuted,
   },
   pillBtnTextActive: {
+    fontFamily: 'DBHeavent',
     color: '#fff',
   },
   addItemBtn: {
+    fontFamily: 'DBHeavent',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.primary,
@@ -1639,10 +1609,11 @@ const styles = StyleSheet.create({
   },
   addItemBtnText: {
     fontFamily: 'DBHeavent',
-    fontSize: 24,
+    fontSize: 19,
     color: '#fff',
   },
   emptyPrdBox: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.background,
     padding: 20,
     borderRadius: theme.radius.lg,
@@ -1652,10 +1623,11 @@ const styles = StyleSheet.create({
   },
   emptyPrdText: {
     fontFamily: 'DBHeavent',
-    fontSize: 25,
+    fontSize: 20,
     color: theme.colors.textMuted,
   },
   productPickerItem: {
+    fontFamily: 'DBHeavent',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1664,6 +1636,7 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.colors.border,
   },
   stockBadge: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.background,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -1671,11 +1644,11 @@ const styles = StyleSheet.create({
   },
   stockBadgeText: {
     fontFamily: 'DBHeavent',
-    fontSize: 23,
+    fontSize: 18,
     color: theme.colors.textMuted,
-    fontWeight: "bold",
-    },
+  },
   prdSelectRow: {
+    fontFamily: 'DBHeavent',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1685,18 +1658,17 @@ const styles = StyleSheet.create({
   },
   prdSelectName: {
     fontFamily: 'DBHeavent',
-    fontSize: 25,
+    fontSize: 20,
     color: theme.colors.text,
-    fontWeight: "bold",
-    },
+  },
   prdSelectStock: {
     fontFamily: 'DBHeavent',
-    fontSize: 23,
+    fontSize: 18,
     color: theme.colors.textMuted,
     marginTop: 2,
-    fontWeight: "bold",
-    },
+  },
   qtyControls: {
+    fontFamily: 'DBHeavent',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.background,
@@ -1704,6 +1676,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   qtyBtn: {
+    fontFamily: 'DBHeavent',
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -1714,12 +1687,13 @@ const styles = StyleSheet.create({
   },
   qtyText: {
     fontFamily: 'DBHeavent',
-    fontSize: 28,
+    fontSize: 22,
     width: 36,
     textAlign: 'center',
     color: theme.colors.text,
   },
   uploadBtn: {
+    fontFamily: 'DBHeavent',
     padding: 20,
     backgroundColor: theme.colors.background,
     borderWidth: 2,
@@ -1730,7 +1704,7 @@ const styles = StyleSheet.create({
   },
   uploadBtnText: {
     fontFamily: 'DBHeavent',
-    fontSize: 26,
+    fontSize: 21,
     color: theme.colors.textMuted,
   },
   evidencePreview: {
@@ -1744,6 +1718,7 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   submitBtn: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.primary,
     padding: 20,
     borderRadius: theme.radius.round,
@@ -1754,7 +1729,7 @@ const styles = StyleSheet.create({
   submitBtnText: {
     fontFamily: 'DBHeavent',
     color: '#fff',
-    fontSize: 30,
+    fontSize: 24,
   },
   // Timeline History
   timelineContainer: {
@@ -1765,6 +1740,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   timelineLine: {
+    fontFamily: 'DBHeavent',
     position: 'absolute',
     left: 11,
     top: 24,
@@ -1773,6 +1749,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.border,
   },
   timelineDot: {
+    fontFamily: 'DBHeavent',
     width: 24,
     height: 24,
     borderRadius: 12,
@@ -1782,6 +1759,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   timelineCard: {
+    fontFamily: 'DBHeavent',
     flex: 1,
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.lg,
@@ -1795,16 +1773,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 16,
-    fontWeight: "bold",
-    },
+  },
   historyDocNo: {
     fontFamily: 'DBHeavent',
-    fontSize: 28,
+    fontSize: 22,
     color: theme.colors.text,
   },
   historyDate: {
     fontFamily: 'DBHeavent',
-    fontSize: 24,
+    fontSize: 19,
     color: theme.colors.textMuted,
     marginTop: 2,
   },
@@ -1815,20 +1792,20 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontFamily: 'DBHeavent',
-    fontSize: 23,
+    fontSize: 18,
   },
   historyBody: {},
   historyTag: {
     fontFamily: 'DBHeavent',
-    fontSize: 23,
+    fontSize: 18,
     backgroundColor: theme.colors.background,
     color: theme.colors.textMuted,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    fontWeight: "bold",
-    },
+  },
   historyLines: {
+    fontFamily: 'DBHeavent',
     marginTop: 12,
     marginBottom: 12,
     backgroundColor: theme.colors.background,
@@ -1844,23 +1821,21 @@ const styles = StyleSheet.create({
   },
   historyLineName: {
     fontFamily: 'DBHeavent',
-    fontSize: 25,
+    fontSize: 20,
     color: theme.colors.text,
-    fontWeight: "bold",
-    },
+  },
   historyLineQty: {
     fontFamily: 'DBHeavent',
-    fontSize: 25,
+    fontSize: 20,
     color: theme.colors.primaryDark,
   },
   historyRemark: {
     fontFamily: 'DBHeavent',
-    fontSize: 25,
-    color: theme.colors.text,
-    backgroundColor: '#f8fafc',
+    fontSize: 20,
+    color: theme.colors.warning,
+    backgroundColor: '#fffbeb',
     padding: 12,
     borderRadius: theme.radius.md,
-    fontWeight: "normal",
   },
   emptyState: {
     alignItems: 'center',
@@ -1868,7 +1843,8 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   emptyIcon: {
-    fontSize: 78,
+    fontFamily: 'DBHeavent',
+    fontSize: 62,
     marginBottom: 16,
   },
   // Floating Nav
@@ -1881,6 +1857,7 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   floatingNav: {
+    fontFamily: 'DBHeavent',
     flexDirection: 'row',
     backgroundColor: '#ffffff', // Light bottom nav
     borderRadius: theme.radius.round,
@@ -1907,20 +1884,20 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   navIconBgActive: {
+    fontFamily: 'DBHeavent',
     backgroundColor: theme.colors.primaryLight,
   },
   navLabel: {
     fontFamily: 'DBHeavent',
-    fontSize: 23,
+    fontSize: 18,
     color: theme.colors.textMuted, // #64748b
-    fontWeight: "bold",
-    },
+  },
   navLabelActive: {
     color: theme.colors.primaryDark,
     fontFamily: 'DBHeavent',
-    fontWeight: "bold",
-    },
+  },
   searchBox: {
+    fontFamily: 'DBHeavent',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.background,

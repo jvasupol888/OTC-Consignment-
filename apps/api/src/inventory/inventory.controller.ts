@@ -14,12 +14,9 @@ export class InventoryController {
     @Query('locationType') locationType?: 'SALE' | 'PHARMACY',
     @Query('saleUserId') saleUserId?: string,
   ) {
-    // ถ้าริมสิทธิ์เป็น SALE จะดูได้แค่ของตัวเอง
+    // ถ้ารับสิทธิ์เป็น SALE จะดูได้แค่ของตัวเอง และร้านที่ตัวเองดูแล
     if (user.role === 'SALE') {
-      return this.inventoryService.list({
-        locationType,
-        saleUserId: user.sub,
-      });
+      return this.inventoryService.listForSaleAgent(user.sub);
     }
 
     // แอดมินดูได้หมด

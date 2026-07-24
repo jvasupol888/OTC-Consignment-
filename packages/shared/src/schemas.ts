@@ -20,6 +20,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 // ---------- Master Data ----------
 export const upsertUserSchema = z.object({
   id: z.string().uuid().optional(),
+  code: z.string().min(1, 'กรุณาระบุรหัสพนักงาน').max(50),
   username: z.string().min(3).max(50),
   password: z.string().min(6).optional(), // optional ตอนแก้ไข (ไม่เปลี่ยนรหัส)
   fullName: z.string().min(1).max(120),
@@ -43,7 +44,11 @@ export const upsertStoreSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().min(1).max(200),
   location: z.string().max(500).optional().nullable(),
+  province: z.string().max(100).optional().nullable(),
+  storageLocation: z.string().max(200).optional().nullable(),
+  phone: z.string().max(50).optional().nullable(),
   assignedUserId: z.string().uuid().nullable(),
+  status: z.enum(RECORD_STATUSES).default('ACTIVE'),
 });
 export type UpsertStoreInput = z.infer<typeof upsertStoreSchema>;
 

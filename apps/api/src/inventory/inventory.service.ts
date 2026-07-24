@@ -1,6 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
-import { inventory, type Database } from '@otc/db';
+import { and, eq, sql, or, inArray } from 'drizzle-orm';
+import { inventory, stores, type Database } from '@otc/db';
 import type { StockDelta } from '@otc/shared';
 import { DATABASE } from '../db/db.module.js';
 
@@ -70,5 +70,30 @@ export class InventoryService {
       .select()
       .from(inventory)
       .where(conds.length ? and(...conds) : sql`true`);
+  }
+
+  /** ดึงสต็อกทั้งหมดที่เกี่ยวข้องกับเซลล์ (SALE ของตัวเอง + PHARMACY ของร้านที่ดูแล) */
+  async listForSaleAgent(userId: string) {
+    const assignedStores = await this.db
+      .select({ id: stores.id })
+      .from(stores)
+      .where(eq(stores.assignedUserId, userId));
+    const storeIds = assignedStores.map((s) => s.id);
+
+    const orConds = [
+      and(eq(inventory.locationType, 'SALE'), eq(inventory.saleUserId, userId))
+    ];
+    
+    if (storeIds.length > 0) {
+      console.log('listForSaleAgent: storeIds =', storeIds);
+      orConds.push(
+        and(eq(inventory.locationType, 'PHARMACY'), inArray(inventory.storeId, storeIds))
+      );
+    }
+
+    return this.db
+      .select()
+      .from(inventory)
+      .where(or(...orConds));
   }
 }

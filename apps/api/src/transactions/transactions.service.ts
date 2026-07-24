@@ -13,6 +13,7 @@ import {
   users,
   stores,
   products,
+  auditLogs,
   type Database,
 } from '@otc/db';
 import {
@@ -41,7 +42,7 @@ export class TransactionsService {
     if (filter?.createdBy) conds.push(eq(transactionDocs.createdBy, filter.createdBy));
     if (filter?.status) conds.push(eq(transactionDocs.status, filter.status as any));
 
-    return this.db
+    const docs = await this.db
       .select({
         id: transactionDocs.id,
         docNo: transactionDocs.docNo,
@@ -61,6 +62,25 @@ export class TransactionsService {
       .leftJoin(stores, eq(transactionDocs.storeId, stores.id))
       .where(conds.length ? and(...conds) : undefined)
       .orderBy(desc(transactionDocs.createdAt));
+
+    if (docs.length === 0) return docs;
+
+    const docIds = docs.map((d) => d.id);
+    const { inArray } = await import('drizzle-orm');
+    const lines = await this.db
+      .select({
+        id: transactionLines.id,
+        transactionId: transactionLines.docId,
+        productId: transactionLines.productId,
+        quantity: transactionLines.quantity,
+      })
+      .from(transactionLines)
+      .where(inArray(transactionLines.docId, docIds));
+
+    return docs.map((d) => ({
+      ...d,
+      lines: lines.filter((l) => l.transactionId === d.id),
+    }));
   }
 
   async findPending() {
@@ -110,6 +130,7 @@ export class TransactionsService {
   }
 
   // ---------------------------------------------------------------
+  // ---------------------------------------------------------------
   // SUBMIT — เซลล์ส่งรายการ → สถานะ PENDING (ยังไม่แตะสต็อก)
   // ---------------------------------------------------------------
   async submit(user: AuthUser, input: SubmitTransactionInput) {
@@ -158,6 +179,15 @@ export class TransactionsService {
         .set({ status: 'APPROVED', approvedBy: admin.sub, approvedAt: new Date() })
         .where(eq(transactionDocs.id, doc.id));
 
+      await tx.insert(auditLogs).values({
+        tableName: 'transaction_docs',
+        recordId: doc.id,
+        action: 'APPROVE',
+        oldData: doc,
+        newData: { ...doc, status: 'APPROVED', approvedBy: admin.sub },
+        userId: admin.sub,
+      });
+
       return { docNo, status: 'APPROVED' as const };
     });
   }
@@ -174,6 +204,15 @@ export class TransactionsService {
       .update(transactionDocs)
       .set({ status: 'REJECTED', approvedBy: admin.sub, approvedAt: new Date(), remark })
       .where(eq(transactionDocs.id, doc.id));
+
+    await this.db.insert(auditLogs).values({
+      tableName: 'transaction_docs',
+      recordId: doc.id,
+      action: 'REJECT',
+      oldData: doc,
+      newData: { ...doc, status: 'REJECTED', approvedBy: admin.sub, remark },
+      userId: admin.sub,
+    });
 
     return { docNo, status: 'REJECTED' as const };
   }
@@ -203,6 +242,15 @@ export class TransactionsService {
           remark: remark ?? doc.remark,
         })
         .where(eq(transactionDocs.id, doc.id));
+
+      await tx.insert(auditLogs).values({
+        tableName: 'transaction_docs',
+        recordId: doc.id,
+        action: 'CANCEL',
+        oldData: doc,
+        newData: { ...doc, status: 'CANCELLED', approvedBy: admin.sub, remark: remark ?? doc.remark },
+        userId: admin.sub,
+      });
 
       return { docNo, status: 'CANCELLED' as const, rolledBack: doc.status === 'APPROVED' };
     });
