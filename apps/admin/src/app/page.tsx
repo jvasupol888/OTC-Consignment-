@@ -837,19 +837,31 @@ export default function AdminPage() {
   // IF NOT LOGGED IN, RENDER LOGIN SCREEN
   if (!token) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-[#f4fbf7] via-[#ffffff] to-[#e8f5e9] p-4 relative overflow-hidden">
-        <div className="absolute top-24 left-24 w-72 h-72 bg-emerald-100/40 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-24 right-24 w-72 h-72 bg-green-100/40 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="min-h-screen w-full flex justify-center lg:justify-end relative bg-slate-50">
+        {/* Full Image Background (Wider angle because it spans full width) */}
+        <div 
+          className="absolute inset-0 w-full h-full hidden lg:block"
+          style={{ 
+            backgroundImage: 'url(/Background.jpg)', 
+            backgroundSize: 'cover', 
+            backgroundPosition: 'center center'
+          }}
+        >
+          {/* White overlay to make the image faded/lighter */}
+          <div className="absolute inset-0 bg-white/60"></div>
+        </div>
 
-        <div className="w-full max-w-md bg-white border border-slate-100 rounded-3xl shadow-2xl p-8 text-slate-800 relative z-10">
+        {/* Right Side: Login Form Panel (Acts as a sidebar on Desktop) */}
+        <div className="w-full lg:w-[45%] xl:w-[35%] max-w-2xl min-h-screen flex items-center justify-center p-8 sm:p-12 lg:p-16 bg-white relative z-10 lg:shadow-[-20px_0_40px_-15px_rgba(0,0,0,0.1)]">
+          <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <img
               src="https://vulcancoalition.com/wp-content/uploads/2024/11/Nutrition-New.webp"
               alt="Nutrition Profess Logo"
-              className="h-16 mx-auto object-contain mb-4"
+              className="h-28 mx-auto object-contain mb-6"
             />
             <h1 className="text-3xl font-bold tracking-wide text-slate-800">Wesell Consignment</h1>
-            <p className="text-slate-500 text-[21px] mt-1 uppercase font-semibold tracking-wider">Nutrition Profess Co., Ltd. (Admin Panel)</p>
+            <p className="text-slate-500 text-[21px] mt-1 uppercase font-semibold tracking-wider">Nutrition Profess Co., Ltd.</p>
           </div>
 
           {loginError && (
@@ -897,6 +909,7 @@ export default function AdminPage() {
               {loggingIn ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
             </button>
           </form>
+          </div>
         </div>
       </div>
     );
