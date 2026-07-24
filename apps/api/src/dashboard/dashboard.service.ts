@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { eq, and, sql, desc, inArray } from 'drizzle-orm';
+import { eq, and, sql, desc, inArray, aliasedTable } from 'drizzle-orm';
 import {
   transactionDocs,
   transactionLines,
@@ -92,6 +92,7 @@ export class DashboardService {
     const totalStores = storesCountResult[0]?.count ?? 0;
 
     // 6. รายการล่าสุด 5 รายการ (Filtered Approved Sales)
+    const approvers = aliasedTable(users, 'approvers');
     const recentTxns = await this.db
       .select({
         id: transactionDocs.id,
@@ -101,11 +102,14 @@ export class DashboardService {
         creatorName: users.fullName,
         storeName: stores.name,
         createdAt: transactionDocs.createdAt,
+        approvedAt: transactionDocs.approvedAt,
+        approvedByFullName: approvers.fullName,
         totalValue: sql<number>`COALESCE(SUM(${transactionLines.quantity} * ${products.price}::numeric), 0)`,
       })
       .from(transactionDocs)
       .leftJoin(users, eq(transactionDocs.createdBy, users.id))
       .leftJoin(stores, eq(transactionDocs.storeId, stores.id))
+      .leftJoin(approvers, eq(transactionDocs.approvedBy, approvers.id))
       .leftJoin(transactionLines, eq(transactionDocs.id, transactionLines.docId))
       .leftJoin(products, eq(transactionLines.productId, products.id))
       .where(baseWhere)
@@ -116,7 +120,9 @@ export class DashboardService {
         transactionDocs.status,
         users.fullName,
         stores.name,
-        transactionDocs.createdAt
+        transactionDocs.createdAt,
+        transactionDocs.approvedAt,
+        approvers.fullName
       )
       .orderBy(desc(transactionDocs.createdAt))
       .limit(5);

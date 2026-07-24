@@ -1160,39 +1160,39 @@ export default function AdminPage() {
               {/* 4 Solid Color Cards */}
               <div className="grid grid-cols-4 gap-4">
                 {/* 1. Green */}
-                <div className="bg-[#1a9f60] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[20px] font-semibold opacity-90">ยอดขายรวม</span>
-                    <h3 className="text-4xl font-bold">฿{(stats?.totalSalesValue || 0).toLocaleString()}</h3>
+                <div className="bg-[#1a9f60] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28 gap-3 overflow-hidden">
+                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                    <span className="text-[20px] font-semibold opacity-90 truncate">ยอดขายรวม</span>
+                    <h3 className="text-[32px] font-bold truncate" title={`฿${(stats?.totalSalesValue || 0).toLocaleString()}`}>฿{(stats?.totalSalesValue || 0).toLocaleString()}</h3>
                   </div>
-                  <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-2xl">💰</div>
+                  <div className="w-11 h-11 shrink-0 rounded-lg bg-white/20 flex items-center justify-center text-2xl">💰</div>
                 </div>
                 
                 {/* 2. Blue */}
-                <div className="bg-[#3b82f6] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[20px] font-semibold opacity-90">สินค้าที่ขายได้</span>
-                    <h3 className="text-4xl font-bold">{(stats?.totalSoldItems || 0).toLocaleString()} <span className="text-[21px] font-normal">ชิ้น</span></h3>
+                <div className="bg-[#3b82f6] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28 gap-3 overflow-hidden">
+                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                    <span className="text-[20px] font-semibold opacity-90 truncate">สินค้าที่ขายได้</span>
+                    <h3 className="text-[32px] font-bold truncate" title={`${(stats?.totalSoldItems || 0).toLocaleString()} ชิ้น`}>{(stats?.totalSoldItems || 0).toLocaleString()} <span className="text-[21px] font-normal">ชิ้น</span></h3>
                   </div>
-                  <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-2xl">📦</div>
+                  <div className="w-11 h-11 shrink-0 rounded-lg bg-white/20 flex items-center justify-center text-2xl">📦</div>
                 </div>
 
                 {/* 3. Purple */}
-                <div className="bg-[#6366f1] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[20px] font-semibold opacity-90">จำนวนรายการขาย</span>
-                    <h3 className="text-4xl font-bold">{(stats?.approvedSalesCount || 0).toLocaleString()} <span className="text-[21px] font-normal">บิล</span></h3>
+                <div className="bg-[#6366f1] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28 gap-3 overflow-hidden">
+                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                    <span className="text-[20px] font-semibold opacity-90 truncate">จำนวนรายการขาย</span>
+                    <h3 className="text-[32px] font-bold truncate" title={`${(stats?.approvedSalesCount || 0).toLocaleString()} บิล`}>{(stats?.approvedSalesCount || 0).toLocaleString()} <span className="text-[21px] font-normal">บิล</span></h3>
                   </div>
-                  <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-2xl">📄</div>
+                  <div className="w-11 h-11 shrink-0 rounded-lg bg-white/20 flex items-center justify-center text-2xl">📄</div>
                 </div>
 
                 {/* 4. Orange */}
-                <div className="bg-[#f59e0b] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[20px] font-semibold opacity-90">สินค้ายอดนิยม</span>
-                    <h3 className="text-4xl font-bold">{stats?.topProduct || '-'}</h3>
+                <div className="bg-[#f59e0b] p-5 rounded-xl shadow-sm text-white flex justify-between items-center h-28 gap-3 overflow-hidden">
+                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                    <span className="text-[20px] font-semibold opacity-90 truncate">สินค้ายอดนิยม</span>
+                    <h3 className="text-[26px] font-bold truncate" title={stats?.topProduct || ''}>{stats?.topProduct || '-'}</h3>
                   </div>
-                  <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-2xl">⭐</div>
+                  <div className="w-11 h-11 shrink-0 rounded-lg bg-white/20 flex items-center justify-center text-2xl">⭐</div>
                 </div>
               </div>
 
@@ -1206,13 +1206,15 @@ export default function AdminPage() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100 text-[19px] text-slate-500 font-semibold">
-                        <th className="py-3 px-4 w-16 text-center">No.</th>
-                        <th className="py-3 px-4 whitespace-nowrap">Doc No.</th>
-                        <th className="py-3 px-4 w-48">เซลล์ผู้ดูแล</th>
-                        <th className="py-3 px-4">ปลายทาง (ร้านยา)</th>
-                        <th className="py-3 px-4 w-32">วันที่ทำรายการ</th>
-                        <th className="py-3 px-4 w-32 text-right">ราคารวม (บาท)</th>
-                        <th className="py-3 px-4 w-32 text-center">ดูรายละเอียด</th>
+                        <th className="py-4 px-4 w-16 text-center">No.</th>
+                        <th className="py-4 px-4 text-center whitespace-nowrap">Doc No.</th>
+                        <th className="py-4 px-4 text-center">ประเภท</th>
+                        <th className="py-4 px-4 text-center">เซลล์ผู้สร้างเอกสาร</th>
+                        <th className="py-4 px-4 text-center">ปลายทาง (เซลล์/ร้านยา)</th>
+                        <th className="py-4 px-4 text-center whitespace-nowrap">วันที่ทำรายการ</th>
+                        <th className="py-4 px-4 text-center">สถานะ</th>
+                        <th className="py-4 px-4 text-left whitespace-nowrap">แก้ไขล่าสุด (โดย)</th>
+                        <th className="py-4 px-4 text-center">จัดการ</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1220,21 +1222,41 @@ export default function AdminPage() {
                         recentTxns.filter((t: any) => t.docType === 'SALE').map((t: any, index: number) => (
                           <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors text-[20px] text-slate-700">
                             <td className="py-3 px-4 text-center text-slate-500">{index + 1}</td>
-                            <td className="py-3 px-4 font-medium text-slate-900 whitespace-nowrap">{t.docNo}</td>
-                            <td className="py-3 px-4">{t.creatorName}</td>
-                            <td className="py-3 px-4">{t.storeName || '-'}</td>
-                            <td className="py-3 px-4 text-slate-500">{new Date(t.createdAt).toLocaleDateString('th-TH')}</td>
-                            <td className="py-3 px-4 text-right font-semibold text-emerald-600">
-                              {Number(t.totalValue || 0) > 0 ? `฿${Number(t.totalValue).toLocaleString()}` : '-'}
+                            <td className="py-3 px-4 text-center font-medium text-slate-900 whitespace-nowrap">{t.docNo}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-[18px] font-medium">{getDocTypeThai(t.docType, t.returnSubtype)}</span>
+                            </td>
+                            <td className="py-3 px-4 text-center">{t.creatorName}</td>
+                            <td className="py-3 px-4 text-center">{t.storeName || '-'}</td>
+                            <td className="py-3 px-4 text-center text-slate-500 whitespace-nowrap">{t.createdAt.substring(0, 10)}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`text-[18px] px-3 py-1 rounded-full font-bold shadow-sm ${
+                                t.status === 'PENDING' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                t.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                                t.status === 'REJECTED' ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              }`}>{t.status}</span>
+                            </td>
+                            <td className="py-3 px-4 text-left text-[18px]">
+                              {t.approvedByFullName ? (
+                                <div className="flex flex-col">
+                                  <div className="text-[19px] font-semibold text-slate-700">{t.approvedByFullName}</div>
+                                  <div className="text-[18px] text-slate-400 mt-0.5">{formatDate(t.approvedAt)}</div>
+                                </div>
+                              ) : <span className="text-[19px] text-slate-400">-</span>}
                             </td>
                             <td className="py-3 px-4 text-center">
-                              <button onClick={() => handleViewTxnDetails(t.docNo)} className="text-emerald-600 hover:text-emerald-700 hover:underline font-medium">รายละเอียด</button>
+                              <button
+                                onClick={() => handleViewTxnDetails(t.docNo)}
+                                className="text-emerald-600 hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors font-semibold"
+                              >
+                                รายละเอียด
+                              </button>
                             </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7} className="py-12 text-center text-slate-400 text-[21px]">กำลังโหลด...</td>
+                          <td colSpan={9} className="py-12 text-center text-slate-400 text-[21px]">กำลังโหลด...</td>
                         </tr>
                       )}
                     </tbody>
