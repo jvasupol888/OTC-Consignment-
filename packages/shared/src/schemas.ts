@@ -47,7 +47,7 @@ export const upsertStoreSchema = z.object({
   province: z.string().max(100).optional().nullable(),
   storageLocation: z.string().max(200).optional().nullable(),
   phone: z.string().max(50).optional().nullable(),
-  assignedUserId: z.string().uuid().nullable(),
+  assignedUserId: z.string().uuid().optional().nullable(),
   status: z.enum(RECORD_STATUSES).default('ACTIVE'),
 });
 export type UpsertStoreInput = z.infer<typeof upsertStoreSchema>;

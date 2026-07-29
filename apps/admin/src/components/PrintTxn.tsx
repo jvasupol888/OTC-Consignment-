@@ -45,9 +45,9 @@ export default function PrintTxn({ txn, store }: { txn: any, store?: any }) {
       <div className="grid grid-cols-2 gap-x-8 gap-y-4 mb-6 font-bold mt-16">
         <div>
           <div className="flex"><span className="w-24">ชื่อ:</span><span>{txn.storeName || '-'}</span></div>
-          <div className="flex mt-2"><span className="w-24">ที่อยู่:</span><span className="flex-1 whitespace-pre-wrap">{store?.location || '-'}</span></div>
-          <div className="flex mt-2"><span className="w-24">จังหวัด:</span><span>{store?.province || '-'}</span></div>
-          <div className="flex mt-2"><span className="w-24">ตำแหน่งเก็บ:</span><span>{store?.storageLocation || '-'}</span></div>
+          <div className="flex mt-2"><span className="w-24">ที่อยู่:</span><span className="flex-1 whitespace-pre-wrap">{txn.storeLocation || store?.location || '-'}</span></div>
+          <div className="flex mt-2"><span className="w-24">จังหวัด:</span><span>{txn.storeProvince || store?.province || '-'}</span></div>
+          <div className="flex mt-2"><span className="w-24">ตำแหน่งเก็บ:</span><span>{txn.storeStorageLocation || store?.storageLocation || '-'}</span></div>
         </div>
         <div>
           <div className="flex"><span className="w-36">ประเภทเอกสาร:</span><span>{title}</span></div>

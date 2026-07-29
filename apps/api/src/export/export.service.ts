@@ -21,98 +21,150 @@ export class ExportService {
       throw new NotFoundException(`ไม่พบเอกสาร ${docNo}`);
     }
 
+    let title = 'ใบทำรายการ';
+    if (txn.docType === 'SALE') title = 'ใบทำรายการขาย';
+    if (txn.docType === 'REQUEST') title = 'ใบเบิกสินค้า';
+    if (txn.docType === 'CONSIGN') title = 'ใบฝากขายสินค้า';
+    if (txn.docType === 'RETURN') title = 'ใบคืนสินค้า';
+
+    const formatPrintDate = (dateStr: string | Date | null | undefined) => {
+      if (!dateStr) return '-';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '-';
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear() + 543;
+      return `${day}/${month}/${year}`;
+    };
+
+    let totalAmount = 0;
+    if (txn.lines && txn.lines.length > 0) {
+      totalAmount = txn.lines.reduce((sum: number, line: any) => sum + (Number(line.quantity) * Number(line.productPrice || 0)), 0);
+    }
+
     const htmlContent = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
-        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
-          body { font-family: 'Sarabun', sans-serif; padding: 40px; color: #333; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #10b981; padding-bottom: 20px; }
-          .header h1 { font-size: 28px; margin: 0; color: #065f46; }
-          .header p { font-size: 14px; margin: 5px 0 0; color: #6b7280; }
-          .info-box { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px; }
-          .info-item { margin-bottom: 8px; }
-          .info-label { font-weight: bold; color: #4b5563; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
-          th { background-color: #f3f4f6; color: #374151; font-weight: bold; text-align: left; padding: 10px; border-bottom: 2px solid #e5e7eb; }
-          td { padding: 10px; border-bottom: 1px solid #e5e7eb; }
-          .text-right { text-align: right; }
+          *, ::before, ::after { box-sizing: border-box; }
+          body { 
+            font-family: 'Kanit', sans-serif; 
+            font-size: 20px; 
+            padding: 48px; 
+            margin: 0; 
+            width: 210mm; /* A4 width */
+            color: #000;
+            line-height: 1.5;
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact;
+          }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; position: relative; }
+          .logo { width: 192px; margin-bottom: 8px; }
+          .title-wrapper { text-align: center; width: 100%; position: absolute; top: 32px; left: 0; display: flex; justify-content: center; }
+          .title { font-weight: 600; font-size: 36px; margin: 16px 0 0 0; }
+          
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 32px; row-gap: 16px; margin-bottom: 24px; margin-top: 64px; }
+          .flex-row { display: flex; margin-top: 8px; font-weight: 600; }
+          .flex-row.first { margin-top: 0; }
+          .w-24 { width: 96px; flex-shrink: 0; }
+          .w-36 { width: 144px; flex-shrink: 0; }
+          .flex-1 { flex: 1 1 0%; white-space: pre-wrap; font-weight: 400; }
+          
+          table.main-table { width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 24px; margin-top: 16px; font-size: 18px; }
+          .main-table th, .main-table td { border: 1px solid #000; }
+          .main-table th { padding: 8px 8px; text-align: center; background-color: #f3f4f6; font-weight: 600; }
+          .main-table td { padding: 12px 8px; font-weight: 400; }
           .text-center { text-align: center; }
-          .total-row { font-weight: bold; background-color: #f9fafb; }
-          .footer { margin-top: 50px; display: flex; justify-content: space-between; text-align: center; font-size: 14px; }
-          .signature { border-top: 1px dashed #9ca3af; padding-top: 10px; width: 200px; margin-top: 60px; }
-          .status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-          .status-APPROVED { background: #d1fae5; color: #065f46; }
-          .status-PENDING { background: #fef3c7; color: #92400e; }
-          .status-REJECTED { background: #fee2e2; color: #991b1b; }
+          .text-left { text-align: left; }
+          .text-right { text-align: right; }
+          .w-12 { width: 48px; }
+          .w-32 { width: 128px; }
+          .w-20 { width: 80px; }
+          .w-28 { width: 112px; }
+          
+          .total-wrapper { display: flex; justify-content: flex-end; margin-bottom: 32px; }
+          table.total-table { border-collapse: collapse; border: 1px solid #000; width: 288px; }
+          .total-table td { border: 1px solid #000; padding: 8px 16px; }
+          .bg-gray-100 { background-color: #f3f4f6; }
+          .font-bold { font-weight: 600; }
+          .text-21 { font-size: 21px; }
+          
+          .remark-box { border: 1px solid #000; padding: 16px; margin-top: 32px; min-height: 100px; }
+          .mb-2 { margin-bottom: 8px; }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1>เอกสารรายการฝากขาย (Consignment Slip)</h1>
-          <p>Nutrition Profess Co., Ltd.</p>
-        </div>
-        
-        <div class="info-box">
           <div>
-            <div class="info-item"><span class="info-label">เลขที่เอกสาร:</span> ${txn.docNo}</div>
-            <div class="info-item"><span class="info-label">ประเภทรายการ:</span> ${txn.docType} ${txn.returnSubtype ? `(${txn.returnSubtype})` : ''}</div>
-            <div class="info-item"><span class="info-label">สถานะ:</span> <span class="status-badge status-${txn.status}">${txn.status}</span></div>
+            <img src="https://vulcancoalition.com/wp-content/uploads/2024/11/Nutrition-New.webp" alt="Logo" class="logo" />
           </div>
-          <div>
-            <div class="info-item"><span class="info-label">วันที่ทำรายการ:</span> ${new Date(txn.createdAt).toLocaleString('th-TH')}</div>
-            <div class="info-item"><span class="info-label">พนักงาน:</span> ${txn.creatorName}</div>
-            <div class="info-item"><span class="info-label">ร้านค้าเครือข่าย:</span> ${txn.storeName || '-'}</div>
+          <div class="title-wrapper">
+            <h1 class="title">${title}</h1>
           </div>
         </div>
 
-        <table>
+        <div class="info-grid">
+          <div>
+            <div class="flex-row first"><span class="w-24">ชื่อ:</span><span class="flex-1" style="font-weight: 600;">${txn.storeName || '-'}</span></div>
+            <div class="flex-row"><span class="w-24">ที่อยู่:</span><span class="flex-1" style="font-weight: 600;">${txn.storeLocation || '-'}</span></div>
+            <div class="flex-row"><span class="w-24">จังหวัด:</span><span class="flex-1" style="font-weight: 600;">${txn.storeProvince || '-'}</span></div>
+            <div class="flex-row"><span class="w-24">ตำแหน่งเก็บ:</span><span class="flex-1" style="font-weight: 600;">${txn.storeStorageLocation || '-'}</span></div>
+          </div>
+          <div>
+            <div class="flex-row first"><span class="w-36">ประเภทเอกสาร:</span><span class="flex-1" style="font-weight: 600;">${title}</span></div>
+            <div class="flex-row"><span class="w-36">เลขที่เอกสาร (Ref):</span><span class="flex-1" style="font-weight: 600;">${txn.docNo}</span></div>
+            <div class="flex-row"><span class="w-36">วันที่:</span><span class="flex-1" style="font-weight: 600;">${formatPrintDate(txn.createdAt)}</span></div>
+            <div class="flex-row"><span class="w-36">ผู้แทนฝ่ายขาย:</span><span class="flex-1" style="font-weight: 600;">${txn.creatorName}</span></div>
+          </div>
+        </div>
+
+        <table class="main-table">
           <thead>
             <tr>
-              <th>ลำดับ</th>
-              <th>รหัสสินค้า</th>
+              <th class="w-12">ลำดับ</th>
+              <th class="w-32">SKU</th>
               <th>รายการสินค้า</th>
-              <th class="text-right">ราคา/หน่วย</th>
-              <th class="text-right">จำนวน</th>
-              <th class="text-right">มูลค่ารวม</th>
+              <th class="w-20">จำนวน</th>
+              <th class="w-28">ราคาต่อหน่วย</th>
+              <th class="w-28">ราคารวม</th>
             </tr>
           </thead>
           <tbody>
-            ${txn.lines.map((l, i) => `
+            ${txn.lines && txn.lines.length > 0 ? txn.lines.map((l: any, i: number) => `
               <tr>
                 <td class="text-center">${i + 1}</td>
-                <td>${l.productSku}</td>
-                <td>${l.productName}</td>
-                <td class="text-right">฿${Number(l.productPrice).toLocaleString()}</td>
+                <td class="text-center">${l.productSku || '-'}</td>
+                <td class="text-left">${l.productName}</td>
                 <td class="text-right">${l.quantity}</td>
-                <td class="text-right">฿${(l.quantity * Number(l.productPrice)).toLocaleString()}</td>
+                <td class="text-right">฿${Number(l.productPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td class="text-right">฿${(Number(l.quantity) * Number(l.productPrice || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
               </tr>
-            `).join('')}
-            <tr class="total-row">
-              <td colspan="4" class="text-right">รวมมูลค่าทั้งสิ้น</td>
-              <td class="text-right">${txn.lines.reduce((sum, l) => sum + l.quantity, 0)}</td>
-              <td class="text-right text-emerald-600">฿${txn.lines.reduce((sum, l) => sum + (l.quantity * Number(l.productPrice)), 0).toLocaleString()}</td>
-            </tr>
+            `).join('') : `
+              <tr>
+                <td colspan="6" class="text-center">ไม่มีรายการ</td>
+              </tr>
+            `}
           </tbody>
         </table>
 
-        ${txn.remark ? `<div style="margin-top: 20px; font-size: 14px;"><span class="info-label">หมายเหตุ:</span> ${txn.remark}</div>` : ''}
+        <div class="total-wrapper">
+          <table class="total-table">
+            <tbody>
+              <tr>
+                <td class="bg-gray-100 font-bold text-center">ราคาสินค้าทั้งหมด</td>
+                <td class="text-right font-bold text-21">
+                  ฿${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-        <div class="footer">
-          <div>
-            <div class="signature">${txn.creatorName}</div>
-            <div>ผู้จัดทำรายการ (เซลล์)</div>
-          </div>
-          <div>
-            <div class="signature"></div>
-            <div>ผู้รับสินค้า/ร้านค้า</div>
-          </div>
-          <div>
-            <div class="signature">${txn.status === 'APPROVED' ? 'ผู้อนุมัติระบบ' : ''}</div>
-            <div>ผู้อนุมัติ (สำนักงานใหญ่)</div>
-          </div>
+        <div class="remark-box">
+          <div class="font-bold mb-2">หมายเหตุ: <span style="font-weight: 400;">${txn.remark || '-'}</span></div>
         </div>
       </body>
       </html>
@@ -121,13 +173,16 @@ export class ExportService {
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
     
-    // ตั้งค่า Content ให้ page รอจนกว่า network จะหยุดทำงาน (เพื่อให้ font โหลดเสร็จ)
+    // ตั้งค่า Content ให้ page
     await page.setContent(htmlContent, { waitUntil: 'load' });
+    
+    // รอจนกว่าฟอนต์โหลดเสร็จสมบูรณ์ (สำคัญมาก)
+    await page.evaluate('document.fonts.ready');
     
     // พิมพ์เป็น PDF
     const pdfBuffer = await page.pdf({
       format: 'A4',
-      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
+      margin: { top: '0', right: '0', bottom: '0', left: '0' },
       printBackground: true,
     });
     

@@ -112,7 +112,7 @@ export class DashboardService {
       .leftJoin(approvers, eq(transactionDocs.approvedBy, approvers.id))
       .leftJoin(transactionLines, eq(transactionDocs.id, transactionLines.docId))
       .leftJoin(products, eq(transactionLines.productId, products.id))
-      .where(baseWhere)
+      .where(salesWhere)
       .groupBy(
         transactionDocs.id,
         transactionDocs.docNo,
@@ -125,7 +125,7 @@ export class DashboardService {
         approvers.fullName
       )
       .orderBy(desc(transactionDocs.createdAt))
-      .limit(5);
+      .limit(10);
 
     // 7. กราฟยอดขายรายวัน
     const chartConditions = [...salesConditions];

@@ -155,8 +155,15 @@ export default function AdminPage() {
   const [inventoryList, setInventoryList] = useState<any[]>([]);
   
   // Dashboard filter states
-  const [dashStartDate, setDashStartDate] = useState('');
-  const [dashEndDate, setDashEndDate] = useState('');
+  const [dashStartDate, setDashStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [dashEndDate, setDashEndDate] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  });
   const [dashSaleUserId, setDashSaleUserId] = useState('ยอดรวมทั้งหมด');
 
   // Accordion states
@@ -203,6 +210,16 @@ export default function AdminPage() {
   const [approvalFilterStatus, setApprovalFilterStatus] = useState<string>('ALL');
   const [approvalSearchText, setApprovalSearchText] = useState<string>('');
   const [singleApproveDocNo, setSingleApproveDocNo] = useState<string | null>(null);
+
+  const [approvalStartDate, setApprovalStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [approvalEndDate, setApprovalEndDate] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split('T')[0];
+  });
 
   // Pagination for masters
   const [productPage, setProductPage] = useState(1);
@@ -441,7 +458,7 @@ export default function AdminPage() {
   const handleDownloadPdf = async (docNo: string) => {
     if (!token) return;
     try {
-      const res = await fetch(`${BASE}/export/transactions/${docNo}/pdf`, {
+      const res = await fetch(`${BASE}/api/export/transactions/${docNo}/pdf`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Download failed');
@@ -817,6 +834,12 @@ export default function AdminPage() {
 
   const filteredApprovals = allTxns.filter((t: any) => {
     if (approvalFilterStatus !== 'ALL' && t.status !== approvalFilterStatus) return false;
+    
+    if (approvalStartDate && approvalEndDate && t.createdAt) {
+      const tDateStr = t.createdAt.split('T')[0];
+      if (tDateStr < approvalStartDate || tDateStr > approvalEndDate) return false;
+    }
+
     if (approvalSearchText) {
       const s = approvalSearchText.toLowerCase();
       if (
@@ -1285,6 +1308,25 @@ export default function AdminPage() {
                       <option value="APPROVED">อนุมัติแล้ว (Approved)</option>
                       <option value="REJECTED">ยกเลิกแล้ว (Canceled)</option>
                     </select>
+
+                    <div className="flex items-center gap-2 ml-4">
+                      <span className="text-[21px] text-slate-600">ตั้งแต่:</span>
+                      <input 
+                        type="date" 
+                        value={approvalStartDate}
+                        onChange={(e) => setApprovalStartDate(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-[21px] text-slate-700 bg-slate-50 w-[140px]" 
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[21px] text-slate-600">ถึง:</span>
+                      <input 
+                        type="date" 
+                        value={approvalEndDate}
+                        onChange={(e) => setApprovalEndDate(e.target.value)}
+                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-[21px] text-slate-700 bg-slate-50 w-[140px]" 
+                      />
+                    </div>
 
                     {selectedApprovals.length > 0 && (
                       <button 
@@ -1887,18 +1929,34 @@ export default function AdminPage() {
                   <span className="text-slate-400">ผู้ส่งข้อมูล:</span>
                   <div className="font-bold text-slate-800">{selectedTxn.creatorName}</div>
                 </div>
-                <div>
-                  <span className="text-slate-400">ร้านขายยา:</span>
-                  <div className="font-bold text-slate-800">{selectedTxn.storeName || '-'}</div>
-                </div>
+                {selectedTxn.storeName && selectedTxn.storeName !== '-' && (
+                  <div>
+                    <span className="text-slate-400">ร้านขายยา:</span>
+                    <div className="font-bold text-slate-800">{selectedTxn.storeName}</div>
+                  </div>
+                )}
                 <div>
                   <span className="text-slate-400">วันที่ส่งข้อมูล:</span>
                   <div className="font-bold text-slate-800">{formatDate(selectedTxn.createdAt)}</div>
                 </div>
-                <div>
-                  <span className="text-slate-400">หมายเหตุ/บันทึก:</span>
-                  <div className="font-bold text-slate-800">{selectedTxn.remark || '-'}</div>
-                </div>
+                {selectedTxn.storeLocation && selectedTxn.storeLocation !== '-' && (
+                  <div>
+                    <span className="text-slate-400">ที่อยู่:</span>
+                    <div className="font-bold text-slate-800 whitespace-pre-wrap">{selectedTxn.storeLocation}</div>
+                  </div>
+                )}
+                {selectedTxn.storeProvince && selectedTxn.storeProvince !== '-' && (
+                  <div>
+                    <span className="text-slate-400">จังหวัด:</span>
+                    <div className="font-bold text-slate-800">{selectedTxn.storeProvince}</div>
+                  </div>
+                )}
+                {selectedTxn.storeStorageLocation && selectedTxn.storeStorageLocation !== '-' && (
+                  <div>
+                    <span className="text-slate-400">ตำแหน่งเก็บ:</span>
+                    <div className="font-bold text-slate-800">{selectedTxn.storeStorageLocation}</div>
+                  </div>
+                )}
                 <div>
                   <span className="text-slate-400">สถานะรายการ:</span>
                   <div>
@@ -1925,6 +1983,7 @@ export default function AdminPage() {
                 <table className="w-full text-left text-[21px] border-collapse">
                   <thead className="bg-slate-50 text-slate-400 font-bold border-b border-slate-100">
                     <tr>
+                      <th className="p-3 text-center w-16">ลำดับ</th>
                       <th className="p-3">รหัสสินค้า</th>
                       <th className="p-3">ชื่อสินค้า</th>
                       <th className="p-3 text-right">ราคา</th>
@@ -1933,8 +1992,9 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {selectedTxn.lines.map((l: any) => (
+                    {selectedTxn.lines.map((l: any, idx: number) => (
                       <tr key={l.id}>
+                        <td className="p-3 text-center font-bold text-slate-400">{idx + 1}</td>
                         <td className="p-3 font-semibold text-slate-600">{l.productSku}</td>
                         <td className="p-3 text-slate-600">{l.productName}</td>
                         <td className="p-3 text-right text-slate-600">฿{Number(l.productPrice).toLocaleString()}</td>
@@ -1943,8 +2003,24 @@ export default function AdminPage() {
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50/80 border-t border-slate-100">
+                      <td colSpan={5} className="p-3 text-right font-bold text-slate-700">ราคาสินค้าทั้งหมด</td>
+                      <td className="p-3 text-right font-black text-emerald-600 text-[22px]">
+                        ฿{(selectedTxn.lines.reduce((sum: number, line: any) => sum + (Number(line.quantity) * Number(line.productPrice || 0)), 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
+
+              {/* Remark */}
+              {selectedTxn.remark && selectedTxn.remark !== '-' && (
+                <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
+                  <span className="text-[21px] text-slate-500 font-bold">หมายเหตุ/บันทึก:</span>
+                  <div className="font-medium text-slate-800 text-[21px] mt-1 whitespace-pre-wrap">{selectedTxn.remark}</div>
+                </div>
+              )}
 
               {/* Evidence Picture */}
               {selectedTxn.evidenceKey && (
@@ -2529,7 +2605,7 @@ export default function AdminPage() {
       
       {/* Printable Area / Preview */}
       {showPrintPreview && selectedTxn && (
-        <div className="fixed inset-0 z-[100] bg-slate-300 flex flex-col overflow-y-auto print:bg-white">
+        <div className="fixed inset-0 z-[100] bg-slate-300 flex flex-col overflow-y-auto print:bg-white print:overflow-visible print:h-auto print:static">
           {/* Toolbar */}
           <div className="sticky top-0 w-full bg-slate-800 text-white p-4 flex justify-between items-center z-10 shadow-lg print:hidden">
             <button onClick={() => setShowPrintPreview(false)} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold flex items-center gap-2 text-[20px] transition-colors">
