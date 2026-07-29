@@ -1400,7 +1400,7 @@ export default function AdminPage() {
                               <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-[18px] font-medium">{getDocTypeThai(t.docType, t.returnSubtype)}</span>
                             </td>
                             <td className="py-3 px-4 text-center">{t.creatorName}</td>
-                            <td className="py-3 px-4 text-center">{t.storeName || '-'}</td>
+                            <td className="py-3 px-4 text-center">{t.docType === 'REQUEST' ? '-' : (t.storeName || '-')}</td>
                             <td className="py-3 px-4 text-center text-slate-500 whitespace-nowrap">{t.createdAt.substring(0, 10)}</td>
                             <td className="py-3 px-4 text-center">
                               <span className={`text-[18px] px-3 py-1 rounded-full font-bold shadow-sm ${
@@ -1929,7 +1929,7 @@ export default function AdminPage() {
                   <span className="text-slate-400">ผู้ส่งข้อมูล:</span>
                   <div className="font-bold text-slate-800">{selectedTxn.creatorName}</div>
                 </div>
-                {selectedTxn.storeName && selectedTxn.storeName !== '-' && (
+                {selectedTxn.storeName && selectedTxn.storeName !== '-' && selectedTxn.docType !== 'REQUEST' && (
                   <div>
                     <span className="text-slate-400">ร้านขายยา:</span>
                     <div className="font-bold text-slate-800">{selectedTxn.storeName}</div>
@@ -1939,19 +1939,19 @@ export default function AdminPage() {
                   <span className="text-slate-400">วันที่ส่งข้อมูล:</span>
                   <div className="font-bold text-slate-800">{formatDate(selectedTxn.createdAt)}</div>
                 </div>
-                {selectedTxn.storeLocation && selectedTxn.storeLocation !== '-' && (
+                {selectedTxn.storeLocation && selectedTxn.storeLocation !== '-' && selectedTxn.docType !== 'REQUEST' && (
                   <div>
                     <span className="text-slate-400">ที่อยู่:</span>
                     <div className="font-bold text-slate-800 whitespace-pre-wrap">{selectedTxn.storeLocation}</div>
                   </div>
                 )}
-                {selectedTxn.storeProvince && selectedTxn.storeProvince !== '-' && (
+                {selectedTxn.storeProvince && selectedTxn.storeProvince !== '-' && selectedTxn.docType !== 'REQUEST' && (
                   <div>
                     <span className="text-slate-400">จังหวัด:</span>
                     <div className="font-bold text-slate-800">{selectedTxn.storeProvince}</div>
                   </div>
                 )}
-                {selectedTxn.storeStorageLocation && selectedTxn.storeStorageLocation !== '-' && (
+                {selectedTxn.storeStorageLocation && selectedTxn.storeStorageLocation !== '-' && selectedTxn.docType !== 'REQUEST' && (
                   <div>
                     <span className="text-slate-400">ตำแหน่งเก็บ:</span>
                     <div className="font-bold text-slate-800">{selectedTxn.storeStorageLocation}</div>

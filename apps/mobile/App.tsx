@@ -121,12 +121,12 @@ const theme = {
   }
 };
 
-class ErrorBoundary extends React.Component {
-  state = { hasError: false, error: null };
-  static getDerivedStateFromError(error) {
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
+  state: {hasError: boolean, error: any} = { hasError: false, error: null };
+  static getDerivedStateFromError(error: any) {
     return { hasError: true, error };
   }
-  componentDidCatch(error, errorInfo) {
+  componentDidCatch(error: any, errorInfo: any) {
     console.error("ErrorBoundary caught an error", error, errorInfo);
   }
   render() {
@@ -372,7 +372,7 @@ function App() {
       const res = await fetch(`${API_URL}/api/transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ docType, returnSubtype, storeId: selectedStoreId || null, lines: txnLines, evidenceKey, remark }),
+        body: JSON.stringify({ docType, returnSubtype, storeId: docType === 'REQUEST' ? null : (selectedStoreId || null), lines: txnLines, evidenceKey, remark }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.message || 'ส่งธุรกรรมล้มเหลว');
@@ -742,7 +742,7 @@ function App() {
                         <Feather name="x" size={24} color={theme.colors.textMuted} />
                       </TouchableOpacity>
                     </View>
-                    <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+                    <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll} contentContainerStyle={{ paddingBottom: 100 }}>
               
               {docType === 'RETURN' && (
                 <View style={styles.formGroup}>
@@ -1092,9 +1092,15 @@ function App() {
                       </View>
                       
                       <View style={styles.historyBody}>
-                        <View style={{flexDirection: 'row', gap: 8}}>
-                          <Text style={styles.historyTag}>{getDocTypeThai(txn.docType, txn.returnSubtype)}</Text>
-                          {txn.storeId && <Text style={[styles.historyTag, {backgroundColor: '#eff6ff', color: '#1d4ed8'}]}>{stores.find(s => s.id === txn.storeId)?.name || 'ร้านยา'}</Text>}
+                        <View style={{flexDirection: 'row', gap: 8, alignItems: 'center'}}>
+                          {(() => {
+                            const colors = txn.docType === 'REQUEST' ? {bg: '#d1fae5', text: '#059669'} : 
+                                           txn.docType === 'CONSIGN' ? {bg: '#e0e7ff', text: '#4338ca'} : 
+                                           txn.docType === 'SALE' ? {bg: '#fef3c7', text: '#d97706'} : 
+                                           {bg: '#fee2e2', text: '#dc2626'};
+                            return <Text style={[styles.historyTag, {backgroundColor: colors.bg, color: colors.text}]}>{getDocTypeThai(txn.docType, txn.returnSubtype)}</Text>;
+                          })()}
+                          {txn.storeId && txn.docType !== 'REQUEST' && <Text style={{fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.text}}>{txn.docType === 'RETURN' && txn.returnSubtype === 'PHARMACY_TO_SALE' ? 'จาก:' : 'ที่:'} <Text style={{color: theme.colors.textMuted}}>{txn.storeName || stores.find(s => s.id === txn.storeId)?.name || 'ร้านยา'}</Text></Text>}
                         </View>
                         
                         <View style={{ marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
@@ -1135,13 +1141,14 @@ function App() {
                           </Text>
                         </View>
 
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: selectedHistoryTxn.approvedByFullName ? 8 : 20 }}>
-                          <Text style={styles.historyTag}>{getDocTypeThai(selectedHistoryTxn.docType, selectedHistoryTxn.returnSubtype)}</Text>
-                          {selectedHistoryTxn.storeId && (
-                            <Text style={[styles.historyTag, {backgroundColor: '#eff6ff', color: '#1d4ed8'}]}>
-                              {stores.find(s => s.id === selectedHistoryTxn.storeId)?.name || 'ร้านยา'}
-                            </Text>
-                          )}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: selectedHistoryTxn.approvedByFullName ? 8 : 20, alignItems: 'center' }}>
+                          {(() => {
+                            const colors = selectedHistoryTxn.docType === 'REQUEST' ? {bg: '#d1fae5', text: '#059669'} : 
+                                           selectedHistoryTxn.docType === 'CONSIGN' ? {bg: '#e0e7ff', text: '#4338ca'} : 
+                                           selectedHistoryTxn.docType === 'SALE' ? {bg: '#fef3c7', text: '#d97706'} : 
+                                           {bg: '#fee2e2', text: '#dc2626'};
+                            return <Text style={[styles.historyTag, {backgroundColor: colors.bg, color: colors.text}]}>{getDocTypeThai(selectedHistoryTxn.docType, selectedHistoryTxn.returnSubtype)}</Text>;
+                          })()}
                           <View style={{ marginTop: 2 }}>{renderStatusBadge(selectedHistoryTxn.status)}</View>
                         </View>
 
@@ -1155,34 +1162,65 @@ function App() {
                           </View>
                         )}
                         
-                        {selectedHistoryTxn.remark && (
-                          <View style={{ marginBottom: 20 }}>
-                            <Text style={{ fontFamily: 'DBHeavent', fontSize: 25, color: theme.colors.text, marginBottom: 6 }}>หมายเหตุ</Text>
-                            <Text style={styles.historyRemark}>{selectedHistoryTxn.remark}</Text>
+                        {selectedHistoryTxn.storeId && selectedHistoryTxn.docType !== 'REQUEST' && (
+                          <View style={{ marginBottom: 20, padding: 16, backgroundColor: '#f8fafc', borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border }}>
+                            <Text style={{ fontFamily: 'DBHeavent', fontSize: 26, color: theme.colors.text, fontWeight: 'bold', marginBottom: 8 }}>ข้อมูลปลายทาง / ต้นทาง</Text>
+                            <View style={{ gap: 4 }}>
+                              {selectedHistoryTxn.storeName && selectedHistoryTxn.storeName !== '-' && <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.text }}><Text style={{ color: theme.colors.textMuted }}>ชื่อ: </Text>{selectedHistoryTxn.storeName}</Text>}
+                              {selectedHistoryTxn.storeLocation && selectedHistoryTxn.storeLocation !== '-' && <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.text }}><Text style={{ color: theme.colors.textMuted }}>ที่อยู่: </Text>{selectedHistoryTxn.storeLocation}</Text>}
+                              {selectedHistoryTxn.storeProvince && selectedHistoryTxn.storeProvince !== '-' && <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.text }}><Text style={{ color: theme.colors.textMuted }}>จังหวัด: </Text>{selectedHistoryTxn.storeProvince}</Text>}
+                              {selectedHistoryTxn.storeStorageLocation && selectedHistoryTxn.storeStorageLocation !== '-' && <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.text }}><Text style={{ color: theme.colors.textMuted }}>ตำแหน่งเก็บ: </Text>{selectedHistoryTxn.storeStorageLocation}</Text>}
+                            </View>
                           </View>
                         )}
 
-                        <Text style={{ fontFamily: 'DBHeavent', fontSize: 28, color: theme.colors.text, marginBottom: 12 }}>รายการสินค้า</Text>
-                        <View style={{ backgroundColor: theme.colors.background, borderRadius: theme.radius.lg, overflow: 'hidden' }}>
+                        <Text style={{ fontFamily: 'DBHeavent', fontSize: 28, color: theme.colors.text, marginBottom: 12, fontWeight: 'bold' }}>รายการสินค้า</Text>
+                        <View style={{ backgroundColor: theme.colors.background, borderRadius: theme.radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.border }}>
+                          {/* Header Row */}
+                          <View style={{ flexDirection: 'row', backgroundColor: '#f1f5f9', paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                            <Text style={{ width: 40, fontFamily: 'DBHeavent', fontSize: 22, color: theme.colors.textMuted, fontWeight: 'bold' }}>ลำดับ</Text>
+                            <Text style={{ flex: 1, fontFamily: 'DBHeavent', fontSize: 22, color: theme.colors.textMuted, fontWeight: 'bold' }}>สินค้า</Text>
+                            <Text style={{ width: 60, fontFamily: 'DBHeavent', fontSize: 22, color: theme.colors.textMuted, fontWeight: 'bold', textAlign: 'right' }}>จำนวน</Text>
+                            <Text style={{ width: 90, fontFamily: 'DBHeavent', fontSize: 22, color: theme.colors.textMuted, fontWeight: 'bold', textAlign: 'right' }}>ราคารวม</Text>
+                          </View>
+                          
                           {(selectedHistoryTxn.lines || []).map((l: any, idx: number) => {
                             const prd = products.find(p => p.id === l.productId);
                             const unitPrice = Number(prd?.price || 0);
                             const total = unitPrice * (l.quantity || 0);
                             return (
-                              <View key={idx} style={{ padding: 16, borderBottomWidth: idx < selectedHistoryTxn.lines.length - 1 ? 1 : 0, borderBottomColor: theme.colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <View style={{ flex: 1, paddingRight: 12 }}>
+                              <View key={idx} style={{ paddingVertical: 12, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.border, flexDirection: 'row', alignItems: 'flex-start' }}>
+                                <Text style={{ width: 40, fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.text, marginTop: 2 }}>{idx + 1}</Text>
+                                <View style={{ flex: 1, paddingRight: 8 }}>
                                   <Text style={{ fontFamily: 'DBHeavent', fontSize: 26, color: theme.colors.text, fontWeight: 'bold' }}>{prd?.name || l.productId}</Text>
-                                  {prd?.sku && <Text style={{ fontFamily: 'DBHeavent', fontSize: 22, color: theme.colors.textMuted }}>SKU : {prd.sku}</Text>}
-                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.textMuted, marginTop: 4 }}>฿{(Number(unitPrice) || 0).toLocaleString()} / ชิ้น</Text>
+                                  {prd?.sku && <Text style={{ fontFamily: 'DBHeavent', fontSize: 22, color: theme.colors.textMuted }}>SKU: {prd.sku}</Text>}
+                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.textMuted, marginTop: 2 }}>฿{(Number(unitPrice) || 0).toLocaleString()} / ชิ้น</Text>
                                 </View>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 28, color: theme.colors.primaryDark }}>{l.quantity} ชิ้น</Text>
-                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 25, color: theme.colors.textMuted, marginTop: 4 }}>฿{(Number(total) || 0).toLocaleString()}</Text>
+                                <View style={{ width: 60, alignItems: 'flex-end', justifyContent: 'flex-start', marginTop: 2 }}>
+                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 26, color: theme.colors.text, fontWeight: 'bold' }}>{l.quantity}</Text>
+                                </View>
+                                <View style={{ width: 90, alignItems: 'flex-end', justifyContent: 'flex-start', marginTop: 2 }}>
+                                  <Text style={{ fontFamily: 'DBHeavent', fontSize: 26, color: theme.colors.primaryDark, fontWeight: 'bold' }}>฿{(Number(total) || 0).toLocaleString()}</Text>
                                 </View>
                               </View>
                             );
                           })}
+
+                          {/* Footer Total Row */}
+                          <View style={{ flexDirection: 'row', backgroundColor: '#f8fafc', paddingVertical: 16, paddingHorizontal: 16 }}>
+                            <Text style={{ flex: 1, fontFamily: 'DBHeavent', fontSize: 26, color: theme.colors.text, fontWeight: 'bold', textAlign: 'right', paddingRight: 16 }}>ราคาสินค้าทั้งหมด</Text>
+                            <Text style={{ fontFamily: 'DBHeavent', fontSize: 28, color: theme.colors.primaryDark, fontWeight: 'bold', textAlign: 'right' }}>
+                              ฿{((selectedHistoryTxn.lines || []).reduce((sum: number, l: any) => sum + (Number(products.find(p => p.id === l.productId)?.price || 0) * (l.quantity || 0)), 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </Text>
+                          </View>
                         </View>
+
+                        {selectedHistoryTxn.remark && selectedHistoryTxn.remark !== '-' && (
+                          <View style={{ marginTop: 20, padding: 16, backgroundColor: '#f8fafc', borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border }}>
+                            <Text style={{ fontFamily: 'DBHeavent', fontSize: 26, color: theme.colors.text, fontWeight: 'bold', marginBottom: 4 }}>หมายเหตุ/บันทึก:</Text>
+                            <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: theme.colors.text }}>{selectedHistoryTxn.remark}</Text>
+                          </View>
+                        )}
                         {selectedHistoryTxn.evidenceKey && (
                           <View style={{ marginTop: 20 }}>
                             <Text style={{ fontFamily: 'DBHeavent', fontSize: 28, color: theme.colors.text, marginBottom: 12, fontWeight: 'bold' }}>รูปภาพหลักฐาน</Text>
@@ -1396,11 +1434,9 @@ const styles = StyleSheet.create({
   logoutBtn: {
     backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: theme.radius.round,
-    marginLeft: 8,
     paddingVertical: 8,
     borderRadius: theme.radius.round,
+    marginLeft: 8,
   },
   logoutText: {
     fontFamily: 'DBHeavent',

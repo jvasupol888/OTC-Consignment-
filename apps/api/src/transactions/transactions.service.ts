@@ -153,7 +153,7 @@ export class TransactionsService {
           docType: input.docType,
           returnSubtype: input.returnSubtype ?? null,
           createdBy: user.sub, // ผูกจาก JWT — client ปลอมไม่ได้
-          storeId: input.storeId ?? null,
+          storeId: input.docType === 'REQUEST' ? null : (input.storeId ?? null),
           status: 'PENDING',
           evidenceKey: input.evidenceKey ?? null,
           remark: input.remark ?? null,
