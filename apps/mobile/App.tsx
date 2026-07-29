@@ -628,7 +628,7 @@ function App() {
                           <View key={inv.id} style={styles.storeInvRow}>
                             <View style={{ flex: 1, paddingRight: 8 }}>
                               <Text style={styles.storeInvName}>{prd?.name || inv.productId}</Text>
-                              <Text style={{ fontFamily: 'DBHeavent', fontSize: 23, color: theme.colors.textMuted, marginTop: 2 }}>
+                              <Text style={{ fontFamily: 'DBHeavent', fontSize: 23, color: theme.colors.textMuted, marginTop: 2, fontWeight: 'bold' }}>
                                 ฿{(Number(unitPrice) || 0).toLocaleString()} / ชิ้น
                               </Text>
                               <Text style={{ fontFamily: 'DBHeavent', fontSize: 21, color: '#64748b', marginTop: 2 }}>
@@ -637,7 +637,7 @@ function App() {
                             </View>
                             <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
                               <Text style={styles.storeInvQty}>{inv.quantity} ชิ้น</Text>
-                              <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: '#3b82f6', marginTop: 2 }}>
+                              <Text style={{ fontFamily: 'DBHeavent', fontSize: 24, color: '#3b82f6', marginTop: 2, fontWeight: 'bold' }}>
                                 ฿{(Number(totalValue) || 0).toLocaleString()}
                               </Text>
                             </View>
@@ -1604,6 +1604,7 @@ const styles = StyleSheet.create({
     fontFamily: 'DBHeavent',
     fontSize: 26,
     color: '#3b82f6',
+    fontWeight: 'bold',
   },
   emptyText: {
     fontFamily: 'DBHeavent',
