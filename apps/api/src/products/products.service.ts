@@ -60,18 +60,20 @@ export class ProductsService {
     
     return await this.db.transaction(async (tx) => {
       let createdCount = 0;
+      
+      const latest = await tx
+        .select({ code: products.code })
+        .from(products)
+        .where(like(products.code, 'PRD%'))
+        .orderBy(desc(products.code))
+        .limit(1);
+      let num = latest[0] ? parseInt(latest[0].code.replace(/^\D+/g, ''), 10) : 0;
+
       for (const item of items) {
         let nextCode = (item as any).code;
         if (!nextCode) {
-           // Basic sequential code logic
-           const latest = await tx
-             .select({ code: products.code })
-             .from(products)
-             .where(like(products.code, 'PRD%'))
-             .orderBy(desc(products.code))
-             .limit(1);
-           const num = latest[0] ? parseInt(latest[0].code.replace(/^\D+/g, ''), 10) : 0;
-           nextCode = `PRD${String(num + 1).padStart(3, '0')}`;
+           num++;
+           nextCode = `PRD${String(num).padStart(3, '0')}`;
         }
         
         const newRows = await tx.insert(products).values({

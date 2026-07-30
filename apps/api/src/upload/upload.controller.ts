@@ -8,6 +8,7 @@ import {
   Get,
   Param,
   Res,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -63,11 +64,22 @@ export class UploadController {
 
   // เซิร์ฟไฟล์ภาพหลักฐาน
   @Get('file/:filename')
-  serveFile(@Param('filename') filename: string, @Res() res: Response) {
+  serveFile(
+    @Param('filename') filename: string, 
+    @Query('download') download: string, 
+    @Res() res: Response
+  ) {
     const filePath = join(process.cwd(), 'uploads', filename);
     if (!existsSync(filePath)) {
       throw new BadRequestException('ไม่พบไฟล์รูปภาพที่ต้องการ');
     }
+    
+    if (download === 'true') {
+      const ext = extname(filename);
+      const downloadName = ext ? filename : `${filename}.jpg`;
+      return res.download(filePath, downloadName);
+    }
+
     return res.sendFile(filePath);
   }
 }

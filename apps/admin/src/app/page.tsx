@@ -128,6 +128,76 @@ const PaginationControls = ({
   );
 };
 
+const SearchableSelect = ({ options, value, onChange, placeholder }: { options: {value: string, label: string}[], value: string, onChange: (val: string) => void, placeholder: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find(o => o.value === value);
+  const displayValue = selectedOption ? selectedOption.label : '';
+
+  const filteredOptions = options.filter(o => 
+    o.label.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="relative w-64 shrink-0" ref={wrapperRef}>
+      <div 
+        className="border-2 border-emerald-500 rounded-md px-3 py-1.5 text-[21px] text-slate-700 bg-white w-full cursor-pointer flex justify-between items-center shadow-sm"
+        onClick={() => { setIsOpen(!isOpen); setSearch(''); }}
+      >
+        <span className="truncate">{displayValue || placeholder}</span>
+        <span className="text-slate-400 text-sm ml-2">▼</span>
+      </div>
+      
+      {isOpen && (
+        <div className="absolute z-[100] w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-72 flex flex-col">
+          <div className="p-2 shrink-0 bg-white border-b border-slate-100">
+            <input
+              type="text"
+              className="w-full border border-slate-200 rounded px-2 py-1 text-[19px] focus:outline-none focus:border-emerald-500 bg-slate-50"
+              placeholder="พิมพ์เพื่อค้นหา..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              autoFocus
+            />
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((o) => (
+                <div 
+                  key={o.value}
+                  className={`px-3 py-2 text-[20px] cursor-pointer text-slate-700 border-b border-slate-50 last:border-0 ${value === o.value ? 'bg-emerald-100 font-bold' : 'hover:bg-emerald-50'}`}
+                  onClick={() => {
+                    onChange(o.value);
+                    setIsOpen(false);
+                  }}
+                >
+                  {o.label}
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-4 text-[19px] text-slate-400 text-center">ไม่พบผลลัพธ์</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -203,6 +273,51 @@ export default function AdminPage() {
   const [invSubTab, setInvSubTab] = useState<'sale' | 'pharm'>('sale');
   const [masterSubTab, setMasterSubTab] = useState<'products' | 'stores' | 'users'>('products');
   const [selectedInventoryOwner, setSelectedInventoryOwner] = useState<string>('');
+
+  // URL Query Sync for Back button support
+  useEffect(() => {
+    const handlePopState = () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const tab = searchParams.get('tab');
+      const subTab = searchParams.get('sub');
+      
+      if (tab) setActiveTab(tab);
+      else setActiveTab('dashboard');
+
+      if (subTab) {
+        if (tab === 'masters') setMasterSubTab(subTab as any);
+        if (tab === 'inventory') setInvSubTab(subTab as any);
+      }
+    };
+    
+    if (window.location.search) {
+      handlePopState();
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    let currentSubTab = '';
+    if (activeTab === 'masters') currentSubTab = masterSubTab;
+    if (activeTab === 'inventory') currentSubTab = invSubTab;
+    
+    const searchParams = new URLSearchParams(window.location.search);
+    searchParams.set('tab', activeTab);
+    if (currentSubTab) {
+      searchParams.set('sub', currentSubTab);
+    } else {
+      searchParams.delete('sub');
+    }
+    
+    const newSearch = '?' + searchParams.toString();
+    if (window.location.search !== newSearch && window.location.search !== '' && newSearch !== '?tab=dashboard') {
+      window.history.pushState(null, '', newSearch);
+    } else if (!window.location.search && newSearch !== '?tab=dashboard') {
+      window.history.pushState(null, '', newSearch);
+    }
+  }, [activeTab, masterSubTab, invSubTab]);
   
   const [selectedApprovals, setSelectedApprovals] = useState<string[]>([]);
   const [isApproving, setIsApproving] = useState(false);
@@ -529,6 +644,7 @@ export default function AdminPage() {
         payload = jsonData.map((row: any) => ({
           name: String(row['ชื่อร้านค้า'] || ''),
           location: String(row['ที่อยู่'] || ''),
+          province: String(row['จังหวัด'] || ''),
           storageLocation: String(row['ตำแหน่งเก็บ'] || ''),
           phone: String(row['เบอร์โทรศัพท์'] || ''),
           assignedUserId: row['รหัสเซลล์ผู้รับผิดชอบ (Optional)'] || undefined
@@ -1452,27 +1568,21 @@ export default function AdminPage() {
           {/* ==================== TAB 3: INVENTORY ==================== */}
           {activeTab === 'inventory' && (
             <div className="space-y-4">
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-visible">
                 {/* Action Bar */}
                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
                   <div className="flex items-center gap-3">
                     <span className="text-[21px] text-slate-600">{invSubTab === 'sale' ? 'เลือกเซลล์:' : 'เลือกร้านค้า:'}</span>
-                    <select 
-                      className="border-2 border-emerald-500 rounded-md px-3 py-1.5 text-[21px] text-slate-700 bg-white w-64 focus:outline-none focus:ring-0"
+                    <SearchableSelect 
+                      placeholder={invSubTab === 'sale' ? "ค้นหาเซลล์..." : "ค้นหาร้านค้า..."}
                       value={selectedInventoryOwner}
-                      onChange={(e) => setSelectedInventoryOwner(e.target.value)}
-                    >
-                      <option value="">พิมพ์ชื่อเพื่อค้นหา...</option>
-                      {invSubTab === 'sale' ? (
-                        users.filter((u: any) => u.role === 'SALE').map((u: any) => (
-                          <option key={u.id} value={u.id}>{u.code} - {u.fullName}</option>
-                        ))
-                      ) : (
-                        stores.map((s: any) => (
-                          <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
-                        ))
-                      )}
-                    </select>
+                      onChange={(val: string) => setSelectedInventoryOwner(val)}
+                      options={invSubTab === 'sale' ? 
+                        users.filter((u: any) => u.role === 'SALE').map((u: any) => ({ value: u.id, label: `${u.code} - ${u.fullName}` }))
+                        : 
+                        stores.map((s: any) => ({ value: s.id, label: `${s.code} - ${s.name}` }))
+                      }
+                    />
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="w-64">
@@ -2025,13 +2135,29 @@ export default function AdminPage() {
               {/* Evidence Picture */}
               {selectedTxn.evidenceKey && (
                 <div className="space-y-2">
-                  <span className="text-[21px] text-slate-400">รูปภาพสลิปหลักฐานแนบ:</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[21px] text-slate-400">รูปภาพสลิปหลักฐานแนบ:</span>
+                    <a
+                      href={`${BASE}/api/upload/file/${selectedTxn.evidenceKey}?download=true`}
+                      download={`slip-${selectedTxn.docNo}.jpg`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-[18px] font-semibold transition-colors flex items-center gap-1.5"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      </svg>
+                      ดาวน์โหลดรูปภาพ
+                    </a>
+                  </div>
                   <div className="border border-slate-100 rounded-2xl p-4 flex items-center justify-center bg-slate-50/50">
-                    <img
-                      src={`${BASE}/api/upload/file/${selectedTxn.evidenceKey}`}
-                      alt="Evidence Slip"
-                      className="max-h-80 object-contain rounded-xl shadow-md"
-                    />
+                    <a href={`${BASE}/api/upload/file/${selectedTxn.evidenceKey}`} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={`${BASE}/api/upload/file/${selectedTxn.evidenceKey}`}
+                        alt="Evidence Slip"
+                        className="max-h-80 object-contain rounded-xl shadow-md hover:opacity-90 transition-opacity cursor-pointer"
+                      />
+                    </a>
                   </div>
                 </div>
               )}

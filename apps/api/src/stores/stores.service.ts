@@ -63,17 +63,20 @@ export class StoresService {
     
     return await this.db.transaction(async (tx) => {
       let createdCount = 0;
+      
+      const latest = await tx
+        .select({ code: stores.code })
+        .from(stores)
+        .where(like(stores.code, 'STR%'))
+        .orderBy(desc(stores.code))
+        .limit(1);
+      let num = latest[0] ? parseInt(latest[0].code.replace(/^\D+/g, ''), 10) : 0;
+
       for (const item of items) {
         let nextCode = (item as any).code;
         if (!nextCode) {
-           const latest = await tx
-             .select({ code: stores.code })
-             .from(stores)
-             .where(like(stores.code, 'STR%'))
-             .orderBy(desc(stores.code))
-             .limit(1);
-           const num = latest[0] ? parseInt(latest[0].code.replace(/^\D+/g, ''), 10) : 0;
-           nextCode = `STR${String(num + 1 + createdCount).padStart(3, '0')}`;
+           num++;
+           nextCode = `STR${String(num).padStart(3, '0')}`;
         }
         
         const newRows = await tx.insert(stores).values({
