@@ -52,7 +52,7 @@ export class ExportService {
           *, ::before, ::after { box-sizing: border-box; }
           body { 
             font-family: 'Kanit', sans-serif; 
-            font-size: 20px; 
+            font-size: 16px; 
             padding: 48px; 
             margin: 0; 
             width: 210mm; /* A4 width */
@@ -64,7 +64,7 @@ export class ExportService {
           .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; position: relative; }
           .logo { width: 192px; margin-bottom: 8px; }
           .title-wrapper { text-align: center; width: 100%; position: absolute; top: 32px; left: 0; display: flex; justify-content: center; }
-          .title { font-weight: 600; font-size: 36px; margin: 16px 0 0 0; }
+          .title { font-weight: 600; font-size: 24px; margin: 16px 0 0 0; }
           
           .info-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 32px; row-gap: 16px; margin-bottom: 24px; margin-top: 64px; }
           .flex-row { display: flex; margin-top: 8px; font-weight: 600; }
@@ -73,7 +73,7 @@ export class ExportService {
           .w-36 { width: 144px; flex-shrink: 0; }
           .flex-1 { flex: 1 1 0%; white-space: pre-wrap; font-weight: 400; }
           
-          table.main-table { width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 24px; margin-top: 16px; font-size: 18px; }
+          table.main-table { width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 24px; margin-top: 16px; font-size: 14px; }
           .main-table th, .main-table td { border: 1px solid #000; }
           .main-table th { padding: 8px 8px; text-align: center; background-color: #f3f4f6; font-weight: 600; }
           .main-table td { padding: 12px 8px; font-weight: 400; }
@@ -90,7 +90,7 @@ export class ExportService {
           .total-table td { border: 1px solid #000; padding: 8px 16px; }
           .bg-gray-100 { background-color: #f3f4f6; }
           .font-bold { font-weight: 600; }
-          .text-21 { font-size: 21px; }
+          .text-21 { font-size: 16px; }
           
           .remark-box { border: 1px solid #000; padding: 16px; margin-top: 32px; min-height: 100px; }
           .mb-2 { margin-bottom: 8px; }
